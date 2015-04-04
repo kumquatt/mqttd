@@ -29,6 +29,9 @@ class EchoServer extends Actor {
     case CommandFailed(_: Bind) => context stop self
 
     case c @ Connected(remote, local) =>
-        println("connected!!!")
+      println("connected!!!")
+      val handler = context.actorOf(Props[EchoHandler])
+      val connection = sender()
+      connection ! Register(handler)
   }
 }
