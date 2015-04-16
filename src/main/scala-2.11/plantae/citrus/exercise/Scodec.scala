@@ -16,7 +16,7 @@ object Scodec extends App{
 
   println("hello world")
 
-//  val msg = variableSizeBytes(uint16, utf8).decode(decoded).require.value
-//  //msg: String = Working with binary is easy!
+  //  val msg = variableSizeBytes(uint16, utf8).decode(decoded).require.value
+  //  //msg: String = Working with binary is easy!
 
 }
