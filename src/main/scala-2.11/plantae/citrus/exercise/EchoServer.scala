@@ -12,6 +12,9 @@ object EchoServer extends App{
   val server = system.actorOf(Props[EchoServer], name = "echoserver")
   server ! StartUpMessage
 
+  val paho = system.actorOf(Props[PahoClient], name = "mqttClient")
+  paho ! CONNECT_MQTT
+
 }
 
 class EchoServer extends Actor {
