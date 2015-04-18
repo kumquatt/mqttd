@@ -17,3 +17,5 @@ libraryDependencies += "com.typesafe.akka" % "akka-remote_2.11" % "2.3.9"
 libraryDependencies += "org.typelevel" % "scodec-core_2.11" % "1.6.0"
 
 libraryDependencies += "org.eclipse.paho" % "org.eclipse.paho.client.mqttv3" % "1.0.2"
+
+libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test"
