@@ -2,7 +2,6 @@ package plantae.citrus.exercise
 
 import akka.actor.Actor
 import akka.io.Tcp.{PeerClosed, Write, Received}
-import plantae.citrus.mqtt.domains.CONNECT
 
 class EchoHandler extends Actor{
 
