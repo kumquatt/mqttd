@@ -45,14 +45,14 @@ case class Payload(payloadElements: List[DataFormat]) extends PacketComponent {
 
 
 
-object EMPTY_COMPONENT {
+case object EMPTY_COMPONENT {
   val EMPTY_VARIABLE_HEADER = VariableHeader(List())
   val EMPTY_PAYLOAD = Payload(List())
 }
 
 class ControlPacketType
 
-object ControlPacketType {
+case object ControlPacketType {
   val RESERVED_0 = BYTE((0x0 << 4).toByte)
   val CONNECT = BYTE((0x1 << 4).toByte)
   val CONAACK = BYTE((0x2 << 4).toByte)
@@ -73,7 +73,7 @@ object ControlPacketType {
 
 class ControlPacketFlag
 
-object ControlPacketFlag {
+case object ControlPacketFlag {
   val RESERVED_0 = BYTE(0x0)
   val CONNECT = BYTE(0x0)
   val PUBLISH_DUP = BYTE((0x1 << 3).toByte)

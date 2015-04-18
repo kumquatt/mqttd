@@ -71,10 +71,24 @@ case class CONNECT(clientId: STRING, cleanSession: Boolean, will: Option[Will], 
 
 case class Will(qos: BYTE, retain: Boolean, topic: STRING, message: STRING)
 
-object WillQos {
+// TODO : check belows.
+// how about extends enumeration ? or case class
+case object WillQos {
   val QOS_1 = BYTE((0x00 << 3).toByte)
   val QOS_2 = BYTE((0x01 << 3).toByte)
   val QOS_3 = BYTE((0x02 << 3).toByte)
+}
+
+// TODO : check belows
+case class WillQos2(level: Int) {
+  def getValue = {
+    level match {
+      case 1 => BYTE((0x00 << 3).toByte)
+      case 2 => BYTE((0x01 << 3).toByte)
+      case 3 => BYTE((0x03 << 3).toByte)
+      case _ => BYTE((0x00 << 3).toByte) // default value is Qos 1
+    }
+  }
 }
 
 case class Authentication(id: STRING, password: Option[STRING])
