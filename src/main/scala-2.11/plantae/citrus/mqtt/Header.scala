@@ -1,11 +1,6 @@
 package plantae.citrus.mqtt
 
-//case class Header (
-//  fixedHeader: FixedHeader,
-//  variableHeader: VariableHeader
-//)
-
-case class FixedHeader (
+case class Header (
   controlPacketType: ControlPacketType.Value,
   dup: Boolean,
   qos: QosLevel.Value,
@@ -13,4 +8,3 @@ case class FixedHeader (
   remainingLength: Long
 )
 
-//trait VariableHeader

@@ -3,13 +3,14 @@ package plantae.citrus.mqtt.domains
 import akka.util.ByteString
 import plantae.citrus.mqtt._
 
-object Connect {
+object CONNECT {
 
   val MinValue = 0
   val MaxValue = 268435455
 
   def decode(bytes: ByteString) : CONNECT = {
-    val fixedHeader = FixedHeader(ControlPacketType.CONNECT, false, QosLevel.AtLeastOnce, false, 0)
+
+    val fixedHeader = Header(ControlPacketType.CONNECT, false, QosLevel.AtLeastOnce, false, 0)
     val protocolName = "TET"
     val protocolVersion : Short = 1
     val cleanSession = false
@@ -20,7 +21,7 @@ object Connect {
   }
 }
 
-case class CONNECT(header: FixedHeader,
+case class CONNECT(header: Header,
                    protocolName: String,
                    protocolVersion: Short,
                    cleanSession: Boolean,

@@ -11,11 +11,12 @@ case object UNSUBSCRIBE_MQTT
 case object PUBLISH_MQTT
 
 class PahoClient extends Actor{
-  val client = new MqttClient("tcp://localhost:8888", "pahomqttpublish")
+  val client = new MqttClient("tcp://localhost:8888", "client_id")
 
   def receive = {
     case CONNECT_MQTT =>
       println("Try to connect MQTT")
+
       client.connect()
 
     case DISCONNECT_MQTT =>
