@@ -34,7 +34,7 @@ case class PUBACK(packetId: INT) extends Packet {
 
   override def variableHeader: VariableHeader = VariableHeader(List(packetId))
 
-  override def payload: Payload = Payload(List())
+  override def payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
 
   override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x04) << 4, REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
@@ -46,7 +46,7 @@ case class PUBREC(packetId: INT) extends Packet {
 
   override def variableHeader: VariableHeader = VariableHeader(List(packetId))
 
-  override def payload: Payload = Payload(List())
+  override def payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
 
   override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x05) << 4, REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
@@ -57,7 +57,7 @@ case class PUBREL(packetId: INT) extends Packet {
 
   override def variableHeader: VariableHeader = VariableHeader(List(packetId))
 
-  override def payload: Payload = Payload(List())
+  override def payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
 
   override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x06) << 4, REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
@@ -68,7 +68,7 @@ case class PUBCOMB(packetId: INT) extends Packet {
 
   override def variableHeader: VariableHeader = VariableHeader(List(packetId))
 
-  override def payload: Payload = Payload(List())
+  override def payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
 
   override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x07) << 4, REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
@@ -90,7 +90,7 @@ object PUBLISHDecoder {
     val topic = Decoder.decodeSTRING(stream)
     val packetId = Decoder.decodeINT(stream)
     val payload = Decoder.decodePUBLISHPAYLOAD(stream, remainingLength.value - topic.usedByte - packetId.usedByte)
-    PUBLISH((typeAndFlag & dupBit).toBoolean, ((typeAndFlag & qosBit) >>1 ).toINT, (typeAndFlag & retainBit).toBoolean, topic, packetId, payload)
+    PUBLISH((typeAndFlag & dupBit).toBoolean, ((typeAndFlag & qosBit) >> 1).toINT, (typeAndFlag & retainBit).toBoolean, topic, packetId, payload)
   }
 }
 
