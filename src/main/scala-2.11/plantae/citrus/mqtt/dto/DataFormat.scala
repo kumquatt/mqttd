@@ -80,9 +80,13 @@ case class INT(value: Short) extends DataFormat {
 
   def >(x: INT): Boolean = this.>(x.value)
 
+  def ==(x: INT): Boolean = this.==(x.value)
+
   def <(x: Int): Boolean = value < x
 
   def >(x: Int): Boolean = value > x
+
+  def ==(x: Int): Boolean = value == x
 
   def toBYTE: BYTE = BYTE(value.toByte)
 }
@@ -154,6 +158,8 @@ object Decoder {
     def proceed(delta: DataFormat): Unit = pos.addAndGet(delta.usedByte)
 
     def rest = bytes.slice(pos.get(), length)
+
+    def position: INT = INT(pos.get().toShort)
   }
 
   def decodeREMAININGLENGTH(stream: ByteStream): REMAININGLENGTH = {

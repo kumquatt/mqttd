@@ -123,14 +123,14 @@ class ConnectionTest extends FunSuite {
   }
 
 
-  test("encode Disconnect"){
-    val disconnectPacket = DISCONNECT
-    assert(disconnectPacket.fixedHeader.packetType === ControlPacketType.DISCONNECT)
-  }
-
-  test("decode Disconnect"){
-    assert(DISCONNECTDecoder.decode(DISCONNECT.encode).fixedHeader.packetType === ControlPacketType.DISCONNECT)
-  }
+//  test("encode Disconnect"){
+//    val disconnectPacket = DISCONNECT
+//    assert(disconnectPacket.fixedHeader.packetType === BYTE)
+//  }
+//
+//  test("decode Disconnect"){
+//    assert(DISCONNECTDecoder.decode(DISCONNECT.encode).fixedHeader.packetType === ControlPacketType.DISCONNECT)
+//  }
 
 }
 
