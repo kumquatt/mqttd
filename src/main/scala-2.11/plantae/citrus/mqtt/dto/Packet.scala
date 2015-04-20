@@ -3,46 +3,40 @@ package plantae.citrus.mqtt.dto
 trait PacketComponent {
   val usedByte: Int
 
-  def encode: Array[Byte]
+  val encode: Array[Byte]
 }
 
 trait Packet extends PacketComponent {
-  val serialize = fixedHeader.encode ++ variableHeader.encode ++ payload.encode
+  val fixedHeader: FixedHeader
 
-  def fixedHeader: FixedHeader
+  val variableHeader: VariableHeader
 
-  def variableHeader: VariableHeader
+  val payload: Payload
 
-  def payload: Payload
-
-  override def encode: Array[Byte] = serialize
+  override val encode: Array[Byte] = fixedHeader.encode ++ variableHeader.encode ++ payload.encode
 }
 
 
-case class FixedHeader(packetType: BYTE, flag: List[BYTE], remainLegnth: REMAININGLENGTH) extends PacketComponent {
-  val serialize = ((packetType | flag.foldLeft(BYTE(0x00))((r, c) => r | c)).encode ++ remainLegnth.encode).toArray
+case class FixedHeader(packetType: BYTE, remainLegnth: REMAININGLENGTH) extends PacketComponent {
 
-  override def encode: Array[Byte] = serialize
+  override val encode: Array[Byte] = (packetType.encode ++ remainLegnth.encode).toArray
 
   override val usedByte: Int = encode.length
 }
 
 case class VariableHeader(headerElements: List[DataFormat]) extends PacketComponent {
-  val serialize = headerElements.foldRight(List[Byte]())((each, accum) => each.encode ++ accum).toArray
 
-  override def encode: Array[Byte] = serialize
+  override val encode: Array[Byte] = headerElements.foldRight(List[Byte]())((each, accum) => each.encode ++ accum).toArray
 
   override val usedByte: Int = encode.length
 }
 
 case class Payload(payloadElements: List[DataFormat]) extends PacketComponent {
-  val serialize = payloadElements.foldRight(List[Byte]())((each, accum) => each.encode ++ accum).toArray
 
-  override def encode: Array[Byte] = serialize
+  override val encode: Array[Byte] = payloadElements.foldRight(List[Byte]())((each, accum) => each.encode ++ accum).toArray
 
   override val usedByte: Int = encode.length
 }
-
 
 
 case object EMPTY_COMPONENT {
@@ -53,45 +47,21 @@ case object EMPTY_COMPONENT {
 class ControlPacketType
 
 case object ControlPacketType {
-  val RESERVED_0 = BYTE((0x0 << 4).toByte)
-  val CONNECT = BYTE((0x1 << 4).toByte)
-  val CONNACK = BYTE((0x2 << 4).toByte)
-  val PUBLISH = BYTE((0x3 << 4).toByte)
-  val PUBACK = BYTE((0x4 << 4).toByte)
-  val PUBREC = BYTE((0x5 << 4).toByte)
-  val PUBREL = BYTE((0x6 << 4).toByte)
-  val PUBCOMP = BYTE((0x7 << 4).toByte)
-  val SUBSCRIBE = BYTE((0x8 << 4).toByte)
-  val SUBACK = BYTE((0x9 << 4).toByte)
-  val UNSUBSCRIBE = BYTE((0xa << 4).toByte)
-  val UNSUBACK = BYTE((0xb << 4).toByte)
-  val PINGREQ = BYTE((0xc << 4).toByte)
-  val PINGRESP = BYTE((0xd << 4).toByte)
-  val DISCONNECT = BYTE((0xe << 4).toByte)
-  val RESERVED_F = BYTE((0xf << 4).toByte)
+  val RESERVED_0 = BYTE(0x00) << 4
+  val CONNECT = BYTE(0x1) << 4
+  val CONAACK = BYTE(0x2) << 4
+  val PUBLISH = BYTE(0x3) << 4
+  val PUBACK = BYTE(0x4) << 4
+  val PUBREC = BYTE(0x5) << 4
+  val PUBREL = BYTE(0x6) << 4
+  val PUBCOMP = BYTE(0x7) << 4
+  val SUBSCRIBE = BYTE(0x8) << 4
+  val SUBACK = BYTE(0x9) << 4
+  val UNSUBSCRIBE = BYTE(0xa) << 4
+  val UNSUBACK = BYTE(0xb) << 4
+  val PINGREQ = BYTE(0xc) << 4
+  val PINGRESP = BYTE(0xd) << 4
+  val DISCONNECT = BYTE(0xe) << 4
+  val RESERVED_F = BYTE(0xf) << 4
 }
-
-class ControlPacketFlag
-
-case object ControlPacketFlag {
-  val RESERVED_0 = BYTE(0x0)
-  val CONNECT = BYTE(0x0)
-  val PUBLISH_DUP = BYTE((0x1 << 3).toByte)
-  val PUBLISH_QOS_0 = BYTE((0x0 << 1).toByte)
-  val PUBLISH_QOS_1 = BYTE((0x1 << 1).toByte)
-  val PUBLISH_QOS_2 = BYTE((0x2 << 1).toByte)
-  val PUBLISH_RETAIN = BYTE(0x1)
-  val PUBACK = BYTE(0x0)
-  val PUBREC = BYTE(0x0)
-  val PUBREL = BYTE((0x1 << 1).toByte)
-  val PUBCOMP = BYTE(0x0)
-  val SUBSCRIBE = BYTE((0x1 << 1).toByte)
-  val SUBACK = BYTE(0x0)
-  val UNSUBSCRIBE = BYTE((0x1 << 1).toByte)
-  val UNSUBACK = BYTE(0x0)
-  val PINGREQ = BYTE(0x0)
-  val PINGRESP = BYTE(0x0)
-  val DISCONNECT = BYTE(0x0)
-}
-
 

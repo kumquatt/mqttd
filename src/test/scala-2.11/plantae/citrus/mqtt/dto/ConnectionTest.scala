@@ -54,14 +54,14 @@ class ConnectionTest extends FunSuite {
 
   test("decode connect packet #1") {
     val encodedConnectPacket = Array[Byte](16, 21, 0, 4, 77, 81, 84, 84, 4, 2, 0, 60, 0, 9, 99, 108, 105, 101, 110, 116, 95, 105, 100)
-    val packet = CONNECTDecoder.decodeCONNECT(encodedConnectPacket)
+    val packet = CONNECTDecoder.decode(encodedConnectPacket)
     assert(packet.clientId === STRING("client_id"))
     assert(packet.cleanSession === true)
 
   }
 
   test("decode connect packet #2") {
-    val min =CONNECTDecoder.decodeCONNECT(
+    val min =CONNECTDecoder.decode(
       CONNECT(
         STRING("client_id"), true,
         Option(null),
@@ -73,7 +73,7 @@ class ConnectionTest extends FunSuite {
     assert(min.clientId === STRING("client_id"))
     assert(min.keepAlive === INT(60))
 
-    val min_id = CONNECTDecoder.decodeCONNECT(
+    val min_id = CONNECTDecoder.decode(
       CONNECT(
         STRING("client_id"), true,
         Option(null),
@@ -85,7 +85,7 @@ class ConnectionTest extends FunSuite {
     assert(min_id.authentication.get.id === STRING("id"))
     assert(min_id.authentication.get.password === None)
 
-    val min_pass =CONNECTDecoder.decodeCONNECT(
+    val min_pass =CONNECTDecoder.decode(
       CONNECT(
         STRING("client_id"), true,
         Option(null),
@@ -102,7 +102,7 @@ class ConnectionTest extends FunSuite {
       "message will messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill " +
       "messagewill messagewill messagewill messagewill messagewill message")
 
-    val min_will = CONNECTDecoder.decodeCONNECT(
+    val min_will = CONNECTDecoder.decode(
       CONNECT(
         STRING("client_id"), false,
         Option(Will(WillQos.QOS_3, true, STRING("will topic topic") , will_message)),
