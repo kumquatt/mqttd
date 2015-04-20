@@ -1,41 +1,41 @@
 package plantae.citrus.mqtt.dto
 
 trait PacketComponent {
-  val usedByte: Int
+  def usedByte: Int
 
-  val encode: Array[Byte]
+  def encode: Array[Byte]
 }
 
 trait Packet extends PacketComponent {
-  val fixedHeader: FixedHeader
+  def fixedHeader: FixedHeader
 
-  val variableHeader: VariableHeader
+  def variableHeader: VariableHeader
 
-  val payload: Payload
+  def payload: Payload
 
-  override val encode: Array[Byte] = fixedHeader.encode ++ variableHeader.encode ++ payload.encode
+  override def encode: Array[Byte] = fixedHeader.encode ++ variableHeader.encode ++ payload.encode
 }
 
 
 case class FixedHeader(packetType: BYTE, remainLegnth: REMAININGLENGTH) extends PacketComponent {
 
-  override val encode: Array[Byte] = (packetType.encode ++ remainLegnth.encode).toArray
+  override def encode: Array[Byte] = (packetType.encode ++ remainLegnth.encode).toArray
 
-  override val usedByte: Int = encode.length
+  override def usedByte: Int = encode.length
 }
 
 case class VariableHeader(headerElements: List[DataFormat]) extends PacketComponent {
 
-  override val encode: Array[Byte] = headerElements.foldRight(List[Byte]())((each, accum) => each.encode ++ accum).toArray
+  override def encode: Array[Byte] = headerElements.foldRight(List[Byte]())((each, accum) => each.encode ++ accum).toArray
 
-  override val usedByte: Int = encode.length
+  override def usedByte: Int = encode.length
 }
 
 case class Payload(payloadElements: List[DataFormat]) extends PacketComponent {
 
-  override val encode: Array[Byte] = payloadElements.foldRight(List[Byte]())((each, accum) => each.encode ++ accum).toArray
+  override def encode: Array[Byte] = payloadElements.foldRight(List[Byte]())((each, accum) => each.encode ++ accum).toArray
 
-  override val usedByte: Int = encode.length
+  override def usedByte: Int = encode.length
 }
 
 

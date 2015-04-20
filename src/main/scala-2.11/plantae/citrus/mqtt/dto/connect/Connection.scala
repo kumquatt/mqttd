@@ -1,4 +1,6 @@
-package plantae.citrus.mqtt.dto
+package plantae.citrus.mqtt.dto.connect
+
+import plantae.citrus.mqtt.dto._
 
 /**
  * Created by yinjae on 15. 4. 17..
@@ -7,7 +9,7 @@ case class CONNECT(clientId: STRING, cleanSession: Boolean, will: Option[Will], 
                    keepAlive: INT) extends Packet {
 
 
-  override val variableHeader: VariableHeader = {
+  override def variableHeader: VariableHeader = {
     def cleanSessionFlag: BYTE = {
       if (cleanSession) BYTE(0x01) << 1
       else BYTE(0x00)
@@ -36,7 +38,7 @@ case class CONNECT(clientId: STRING, cleanSession: Boolean, will: Option[Will], 
     VariableHeader(List(STRING("MQTT"), BYTE(0x4), (cleanSessionFlag | willFlag | authenticationFlag), keepAlive))
   }
 
-  override val payload: Payload = {
+  override def payload: Payload = {
     val willPayload = will match {
       case Some(it) => {
         List(it.topic, it.message)
@@ -58,11 +60,11 @@ case class CONNECT(clientId: STRING, cleanSession: Boolean, will: Option[Will], 
 
     Payload(List(clientId) ++ willPayload ++ authenticationPayload)
   }
-  override val fixedHeader: FixedHeader = FixedHeader(ControlPacketType.CONNECT,
+  override def fixedHeader: FixedHeader = FixedHeader(ControlPacketType.CONNECT,
     REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
 
-  override val usedByte: Int = encode.length
+  override def usedByte: Int = encode.length
 }
 
 
@@ -141,15 +143,15 @@ object CONNECTDecoder {
 
 case class CONNACK(sessionPresent: Boolean, returnCode: BYTE) extends Packet {
 
-  override val variableHeader: VariableHeader = VariableHeader(List({
+  override def variableHeader: VariableHeader = VariableHeader(List({
     if (sessionPresent) BYTE(0x01) else BYTE(0x00)
   }, returnCode))
 
-  override val payload: Payload = Payload(List())
+  override def payload: Payload = Payload(List())
 
-  override val fixedHeader: FixedHeader = FixedHeader(BYTE(0x02), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
+  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x02), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
-  override val usedByte: Int = encode.length
+  override def usedByte: Int = encode.length
 }
 
 case object ReturnCode {

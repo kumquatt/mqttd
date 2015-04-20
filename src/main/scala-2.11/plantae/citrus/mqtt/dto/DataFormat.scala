@@ -22,9 +22,13 @@ case class BYTE(value: Byte) extends DataFormat {
 
   }
 
-  def |(x: BYTE): BYTE = BYTE((value | x.value).toByte)
+  def |(x: BYTE): BYTE = this.|(x.value)
 
-  def &(x: BYTE): BYTE = BYTE((value & x.value).toByte)
+  def |(x: Byte): BYTE = BYTE((value | x).toByte)
+
+  def &(x: BYTE): BYTE = this.&(x.value)
+
+  def &(x: Byte): BYTE = BYTE((value & x).toByte)
 
   def <<(x: INT): BYTE = this.<<(x.value)
 
@@ -41,8 +45,11 @@ case class BYTE(value: Byte) extends DataFormat {
 
   override val usedByte: Int = 1
 
-  def toBoolean: Boolean = {
-    return value != 0
+  def toBoolean: Boolean = value != 0
+
+
+  def toINT: INT = {
+    INT(value.toShort)
   }
 }
 
@@ -68,6 +75,16 @@ case class INT(value: Short) extends DataFormat {
   }
 
   override val usedByte: Int = 2
+
+  def <(x: INT): Boolean = this.<(x.value)
+
+  def >(x: INT): Boolean = this.>(x.value)
+
+  def <(x: Int): Boolean = value < x
+
+  def >(x: Int): Boolean = value > x
+
+  def toBYTE: BYTE = BYTE(value.toByte)
 }
 
 case class REMAININGLENGTH(value: Int) extends DataFormat {
@@ -93,6 +110,15 @@ case class STRING(value: String) extends DataFormat {
   override val encode: List[Byte] = {
     INT(length).encode ++ value.getBytes.toList
   }
+
+  override val usedByte: Int = encode.length
+}
+
+case class PUBLISHPAYLOAD(value: Array[Byte]) extends DataFormat {
+
+
+  override val encode: List[Byte] = value.toList
+
 
   override val usedByte: Int = encode.length
 }
@@ -155,6 +181,13 @@ object Decoder {
     stream.proceed(data)
     data
   }
+
+  def decodePUBLISHPAYLOAD(stream: ByteStream, size: Int): PUBLISHPAYLOAD = {
+    val data = PUBLISHPAYLOAD(stream.rest.slice(0, size))
+    stream.proceed(data)
+    data
+  }
+
 
   private def remainingLengthDecoding(bytes: Array[Byte], index: Int, multiplier: Int): Int = {
     val encodeByte = bytes(index)
