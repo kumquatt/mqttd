@@ -18,6 +18,7 @@ class PahoClient extends Actor{
       println("Try to connect MQTT")
 
       client.connect()
+      println("mqtt connected? " + client.isConnected)
 
     case DISCONNECT_MQTT =>
       println("Try to disconnect MQTT")
@@ -38,6 +39,10 @@ class PahoClient extends Actor{
       mqttMessage.setRetained(false)
 //      mqttMessage.setPayload([0,0]
       client.publish("topic1", mqttMessage)
+
+    case _ =>
+      println("....")
+
 
   }
 }
