@@ -49,7 +49,7 @@ class ControlPacketType
 case object ControlPacketType {
   val RESERVED_0 = BYTE(0x00) << 4
   val CONNECT = BYTE(0x1) << 4
-  val CONAACK = BYTE(0x2) << 4
+  val CONNACK = BYTE(0x2) << 4
   val PUBLISH = BYTE(0x3) << 4
   val PUBACK = BYTE(0x4) << 4
   val PUBREC = BYTE(0x5) << 4
