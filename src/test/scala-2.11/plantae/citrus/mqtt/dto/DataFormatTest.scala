@@ -36,9 +36,12 @@ class DataFormatTest extends FunSuite{
     assert("client_id".getBytes === Array(99, 108, 105, 101, 110, 116, 95, 105, 100))
 
     val shortString = "aaa"
-    val longString = "will message will messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill message will messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill message"
-    assert(Decoder.decodeSTRING(Decoder.ByteStreammer(STRING(shortString).encode.toArray)) === STRING(shortString))
-    assert(Decoder.decodeSTRING(Decoder.ByteStreammer(STRING(longString).encode.toArray)) === STRING(longString))
+    val longString = "will message will messagewill messagewill messagewill messagewill messagewill messagewill " +
+      "messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill message will " +
+      "messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill " +
+      "messagewill messagewill messagewill messagewill message"
+    assert(Decoder.decodeSTRING(Decoder.ByteStream(STRING(shortString).encode.toArray)) === STRING(shortString))
+    assert(Decoder.decodeSTRING(Decoder.ByteStream(STRING(longString).encode.toArray)) === STRING(longString))
   }
 
 }

@@ -7,11 +7,7 @@ case class CONNECT(clientId: STRING, cleanSession: Boolean, will: Option[Will], 
                    keepAlive: INT) extends Packet {
 
 
-  override def fixedHeader: FixedHeader = FixedHeader(ControlPacketType.CONNECT,
-    List(ControlPacketFlag.CONNECT),
-    REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
-
-  override def variableHeader: VariableHeader = {
+  override val variableHeader: VariableHeader = {
     def cleanSessionFlag: BYTE = {
       if (cleanSession) BYTE(0x01) << 1
       else BYTE(0x00)
@@ -26,7 +22,6 @@ case class CONNECT(clientId: STRING, cleanSession: Boolean, will: Option[Will], 
       case None => BYTE(0x00)
     }
 
-
     val authenticationFlag = authentication match {
       case Some(it) => {
         val passwordFlag = it.password match {
@@ -38,11 +33,10 @@ case class CONNECT(clientId: STRING, cleanSession: Boolean, will: Option[Will], 
       case None => BYTE(0x00)
     }
 
-
     VariableHeader(List(STRING("MQTT"), BYTE(0x4), (cleanSessionFlag | willFlag | authenticationFlag), keepAlive))
   }
 
-  override def payload: Payload = {
+  override val payload: Payload = {
     val willPayload = will match {
       case Some(it) => {
         List(it.topic, it.message)
@@ -64,6 +58,9 @@ case class CONNECT(clientId: STRING, cleanSession: Boolean, will: Option[Will], 
 
     Payload(List(clientId) ++ willPayload ++ authenticationPayload)
   }
+  override val fixedHeader: FixedHeader = FixedHeader(ControlPacketType.CONNECT,
+    REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
+
 
   override val usedByte: Int = encode.length
 }
@@ -93,6 +90,7 @@ case class WillQos2(level: Int) {
 
 case class Authentication(id: STRING, password: Option[STRING])
 
+
 object CONNECTDecoder {
   val CLEAN_SESSION = BYTE(0x1) << 1
   val WILL_FLAG = BYTE(0x1) << 2
@@ -101,8 +99,8 @@ object CONNECTDecoder {
   val AUTHENTICATION_PASSWORD = BYTE(0x1) << 6
   val AUTHENTICATION_ID = BYTE(0x1) << 7
 
-  def decodeCONNECT(bytes: Array[Byte]): CONNECT = {
-    val streammer = Decoder.ByteStreammer(bytes)
+  def decode(bytes: Array[Byte]): CONNECT = {
+    val streammer = Decoder.ByteStream(bytes)
     val packetTypeAndFlag = Decoder.decodeBYTE(streammer)
 
     val remainingLength = Decoder.decodeREMAININGLENGTH(streammer)
@@ -114,39 +112,63 @@ object CONNECTDecoder {
     val willFlag = flag & WILL_FLAG
 
     val cleanSession = flag & CLEAN_SESSION
-    val passwordFlag = flag & AUTHENTICATION_PASSWORD
-    val idFlag = flag & AUTHENTICATION_ID
 
     val clientId = Decoder.decodeSTRING(streammer)
 
-
-    val will = {
+    CONNECT(clientId, cleanSession.toBoolean, {
       if (willFlag.toBoolean) {
         Some(Will(flag & WILL_QOS,
           (flag & WILL_RETAIN).toBoolean,
           Decoder.decodeSTRING(streammer),
-          Decoder.decodeSTRING(streammer))
-        )
+          Decoder.decodeSTRING(streammer)))
       } else {
         None
       }
-    }
-
-
-    val authentication = {
-      if (idFlag.toBoolean) Some(Authentication(Decoder.decodeSTRING(streammer), {
-        if (passwordFlag.toBoolean) {
+    }, {
+      if ((flag & AUTHENTICATION_ID).toBoolean) Some(Authentication(Decoder.decodeSTRING(streammer), {
+        if ((flag & AUTHENTICATION_PASSWORD).toBoolean) {
           Some(Decoder.decodeSTRING(streammer))
         } else {
           None
         }
       }
-      )
-      )
+      ))
       else None
-    }
+    }, keepAlive)
 
-    CONNECT(clientId, cleanSession.toBoolean, will, authentication, keepAlive)
+  }
+}
 
+case class CONNACK(sessionPresent: Boolean, returnCode: BYTE) extends Packet {
+
+  override val variableHeader: VariableHeader = VariableHeader(List({
+    if (sessionPresent) BYTE(0x01) else BYTE(0x00)
+  }, returnCode))
+
+  override val payload: Payload = Payload(List())
+
+  override val fixedHeader: FixedHeader = FixedHeader(BYTE(0x02), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
+
+  override val usedByte: Int = encode.length
+}
+
+case object ReturnCode {
+  val connectionAccepted = BYTE(0x00)
+  val unacceptableProtocolVersion = BYTE(0x01)
+  val identifierRejected = BYTE(0x02)
+  val ServerUnavailable = BYTE(0x03)
+  val badUserNameOrPassword = BYTE(0x04)
+  val notAuthorized = BYTE(0x05)
+}
+
+object CONNACKDecoder {
+  def decode(bytes: Array[Byte]): CONNACK = {
+    val streammer = Decoder.ByteStream(bytes)
+    val packetTypeAndFlag = Decoder.decodeBYTE(streammer)
+    val remainingLength = Decoder.decodeREMAININGLENGTH(streammer)
+    val flags = Decoder.decodeBYTE(streammer)
+    val returnCode = Decoder.decodeBYTE(streammer)
+
+    CONNACK(flags.toBoolean, returnCode)
   }
 }
