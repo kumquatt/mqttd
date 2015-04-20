@@ -149,7 +149,7 @@ case class CONNACK(sessionPresent: Boolean, returnCode: BYTE) extends Packet {
 
   override def payload: Payload = Payload(List())
 
-  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x02), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
+  override def fixedHeader: FixedHeader = FixedHeader(ControlPacketType.CONNACK, REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
   override def usedByte: Int = encode.length
 }
