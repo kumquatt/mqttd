@@ -1,5 +1,7 @@
 package plantae.citrus.mqtt.dto
 
+import java.util.concurrent.atomic.AtomicInteger
+
 trait DataFormat {
   def encode: List[Byte]
 
@@ -24,6 +26,15 @@ case class BYTE(value: Byte) extends DataFormat {
   def |(x: BYTE): BYTE = BYTE((value | x.value).toByte)
 
   def &(x: BYTE): BYTE = BYTE((value & x.value).toByte)
+
+  def <<(x: INT): BYTE = this.<<(x.value)
+
+  def >>(x: INT): BYTE = this.>>(x.value)
+
+  def <<(x: Int): BYTE = BYTE((value << x).toByte)
+
+  def >>(x: Int): BYTE = BYTE((value >> x).toByte)
+
 
   override def encode: List[Byte] = {
     List(value)
@@ -71,32 +82,83 @@ case class REMAININGLENGTH(value: Int) extends DataFormat {
   override def usedByte: Int = encode.length
 }
 
-case class STRING(string: String) extends DataFormat {
-  val length: Short = if (string == null) 0 else string.length.toShort
+case class STRING(value: String) extends DataFormat {
+  val length: Short = if (value == null) 0 else value.getBytes.length.toShort
 
 
   override def encode: List[Byte] = {
-    if (string == null) List()
-    else INT(length).encode ++ string.getBytes.toList
-  }
-
-  def this(bytes: Array[Byte]) {
-    this(new String(bytes.slice(2, 2 +(bytes(0) << 8 & 0xFF00| bytes(1)))))
+    if (value == null) List()
+    else INT(length).encode ++ value.getBytes.toList
   }
 
   override def usedByte: Int = encode.length
 }
 
+object EmptyDataFormat {
+  val emptySTRING = STRING(null)
+}
+
+object Encoder {
+  def encode(source: Option[DataFormat]): List[Byte] = source match {
+    case None => List()
+    case Some(x) => x match {
+      case str: STRING => Encoder.encode(Some(INT(str.length))) ++ str.value.getBytes.toList
+      case int: INT => List(int.mostSignificantByte.value, int.leastSignificantByte.value)
+      case byte: BYTE => List(byte.value)
+      case remainingLength: REMAININGLENGTH => {
+        def remainingLengthEncoding(x: Int): List[Byte] = {
+          if (x <= 0)
+            List()
+          else {
+            val newX = x / 128
+            def continueBitOn = if (newX > 0) 128 else 0
+            (x % 128 | continueBitOn).toByte :: remainingLengthEncoding(newX)
+          }
+        }
+        remainingLengthEncoding(remainingLength.value)
+      }
+    }
+  }
+}
 
 object Decoder {
 
-  def decodeREMAININGLENGTH(bytes: Array[Byte]): REMAININGLENGTH = REMAININGLENGTH(remainingLengthDecoding(bytes, 0, 1))
+  case class ByteStreammer(bytes: Array[Byte]) {
+    val pos = new AtomicInteger(0)
+    val length = bytes.length
 
-  def decodeBYTE(bytes: Array[Byte]): BYTE = BYTE(bytes(0))
+    def proceed(delta: DataFormat): Unit = pos.addAndGet(delta.usedByte)
 
-  def decodeINT(bytes: Array[Byte]): INT = INT(((bytes(0) << 8 & 0xFF00) + bytes(1)).toShort)
 
-  def decodeSTRING(bytes: Array[Byte]): STRING = STRING(new String(bytes.slice(2, 2 + (bytes(0) << 8 | bytes(1)))))
+    def rest =
+      bytes.slice(pos.get(), length)
+
+  }
+
+  def decodeREMAININGLENGTH(streammer: ByteStreammer): REMAININGLENGTH = {
+    val data = REMAININGLENGTH(remainingLengthDecoding(streammer.rest, 0, 1))
+    streammer.proceed(data)
+    data
+  }
+
+  def decodeBYTE(streammer: ByteStreammer): BYTE = {
+    val data = BYTE(streammer.rest(0))
+    streammer.proceed(data)
+    data
+  }
+
+  def decodeINT(streammer: ByteStreammer): INT = {
+    val data = INT(((streammer.rest(0) << 8 & 0xFF00) + streammer.rest(1)).toShort)
+    streammer.proceed(data)
+    data
+  }
+
+
+  def decodeSTRING(streammer: ByteStreammer): STRING = {
+    val data = STRING(new String(streammer.rest.slice(2, 2 + (streammer.rest(0) << 8 & 0xFF00 | streammer.rest(1)).toShort)))
+    streammer.proceed(data)
+    data
+  }
 
   private def remainingLengthDecoding(bytes: Array[Byte], index: Int, multiplier: Int): Int = {
     val encodeByte = bytes(index)
@@ -106,5 +168,4 @@ object Decoder {
     else
       newValue + remainingLengthDecoding(bytes, index + 1, multiplier * 128)
   }
-
 }

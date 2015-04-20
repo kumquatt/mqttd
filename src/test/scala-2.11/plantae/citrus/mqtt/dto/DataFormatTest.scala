@@ -15,6 +15,10 @@ class DataFormatTest extends FunSuite{
     assert(BYTE(1).isLeastSignificantBitOn === true)
     assert(BYTE(2).isMostSignificantBitOn === false)
     assert(BYTE(3).isMostSignificantBitOn === false)
+    assert((BYTE(0x1) << 3) == BYTE(0x8))
+    assert(BYTE(0x0).toBoolean == false)
+    assert(Range(0x1,0xFF).foldLeft(true)((a,b)=> {a && BYTE(b.toByte).toBoolean}) == true)
+
   }
 
   test("INT test"){
@@ -33,8 +37,8 @@ class DataFormatTest extends FunSuite{
 
     val shortString = "aaa"
     val longString = "will message will messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill message will messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill message"
-    assert(Decoder.decodeSTRING(STRING(shortString).encode.toArray) === STRING(shortString))
-    assert(Decoder.decodeSTRING(STRING(longString).encode.toArray) === STRING(longString))
+    assert(Decoder.decodeSTRING(Decoder.ByteStreammer(STRING(shortString).encode.toArray)) === STRING(shortString))
+    assert(Decoder.decodeSTRING(Decoder.ByteStreammer(STRING(longString).encode.toArray)) === STRING(longString))
   }
 
 }

@@ -15,7 +15,7 @@ class ConnectionTest extends FunSuite {
 
   test("create connect packet") {
     new ConnectPacketTest {
-      assert(test === true)
+      assert(test)
 
 
       val connectPacket =
@@ -81,7 +81,7 @@ class ConnectionTest extends FunSuite {
         INT(60)
       ).encode
     )
-
+    assert(min_id.clientId === STRING("client_id"))
     assert(min_id.authentication.get.id === STRING("id"))
     assert(min_id.authentication.get.password === None)
 
@@ -97,7 +97,10 @@ class ConnectionTest extends FunSuite {
     assert(min_pass.authentication.get.id === STRING("id"))
     assert(min_pass.authentication.get.password === Some(STRING("password")))
 
-    val will_message = STRING("will message will messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill message will messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill message")
+    val will_message = STRING("will message will messagewill messagewill messagewill messagewill messagewill " +
+      "messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill " +
+      "message will messagewill messagewill messagewill messagewill messagewill messagewill messagewill messagewill " +
+      "messagewill messagewill messagewill messagewill messagewill message")
 
     val min_will = CONNECTDecoder.decodeCONNECT(
       CONNECT(
