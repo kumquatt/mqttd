@@ -55,7 +55,7 @@ class ControlPacketType
 case object ControlPacketType {
   val RESERVED_0 = BYTE((0x0 << 4).toByte)
   val CONNECT = BYTE((0x1 << 4).toByte)
-  val CONAACK = BYTE((0x2 << 4).toByte)
+  val CONNACK = BYTE((0x2 << 4).toByte)
   val PUBLISH = BYTE((0x3 << 4).toByte)
   val PUBACK = BYTE((0x4 << 4).toByte)
   val PUBREC = BYTE((0x5 << 4).toByte)
