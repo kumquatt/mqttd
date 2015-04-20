@@ -11,7 +11,7 @@ class PublishTest extends FunSuite {
 
 
   test("create publish packet") {
-    val connectPacket =
+    val publish =
       PUBLISH(
         false, INT(3),
         false,
@@ -20,17 +20,17 @@ class PublishTest extends FunSuite {
         PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte))
       )
 
-    assert(connectPacket.dup == false)
-    assert(connectPacket.qos == INT(3))
-    assert(connectPacket.retain == false)
-    assert(connectPacket.packetId === INT(40293.toShort))
-    assert(connectPacket.topic === STRING("test/topic"))
-    assert(connectPacket.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
+    assert(publish.dup == false)
+    assert(publish.qos == INT(3))
+    assert(publish.retain == false)
+    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.topic === STRING("test/topic"))
+    assert(publish.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
   }
 
 
   test("create publish packet - retain & dup") {
-    val connectPacket =
+    val publish =
       PUBLISH(
         true, INT(2),
         true,
@@ -39,16 +39,16 @@ class PublishTest extends FunSuite {
         PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte))
       )
 
-    assert(connectPacket.dup == true)
-    assert(connectPacket.qos == INT(2))
-    assert(connectPacket.retain == true)
-    assert(connectPacket.packetId === INT(40293.toShort))
-    assert(connectPacket.topic === STRING("test/topic"))
-    assert(connectPacket.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
+    assert(publish.dup == true)
+    assert(publish.qos == INT(2))
+    assert(publish.retain == true)
+    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.topic === STRING("test/topic"))
+    assert(publish.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
   }
 
   test("create publish packet - empty payload") {
-    val connectPacket =
+    val publish =
       PUBLISH(
         false, INT(3),
         false,
@@ -57,17 +57,17 @@ class PublishTest extends FunSuite {
         PUBLISHPAYLOAD(Array())
       )
 
-    assert(connectPacket.dup == false)
-    assert(connectPacket.qos == INT(3))
-    assert(connectPacket.retain == false)
-    assert(connectPacket.packetId === INT(40293.toShort))
-    assert(connectPacket.topic === STRING("test/topic"))
-    assert(connectPacket.payload.encode === PUBLISHPAYLOAD(Array()).encode)
+    assert(publish.dup == false)
+    assert(publish.qos == INT(3))
+    assert(publish.retain == false)
+    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.topic === STRING("test/topic"))
+    assert(publish.payload.encode === PUBLISHPAYLOAD(Array()).encode)
   }
 
 
   test("encode/decode publish packet") {
-    val connectPacket = PUBLISHDecoder.decode(
+    val publish = PUBLISHDecoder.decode(
       PUBLISH(
         false, INT(3),
         false,
@@ -77,17 +77,17 @@ class PublishTest extends FunSuite {
       ).encode
     )
 
-    assert(connectPacket.dup == false)
-    assert(connectPacket.qos == INT(3))
-    assert(connectPacket.retain == false)
-    assert(connectPacket.packetId === INT(40293.toShort))
-    assert(connectPacket.topic === STRING("test/topic"))
-    assert(connectPacket.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
+    assert(publish.dup == false)
+    assert(publish.qos == INT(3))
+    assert(publish.retain == false)
+    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.topic === STRING("test/topic"))
+    assert(publish.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
   }
 
 
   test("encode/decode publish packet - retain & dup") {
-    val connectPacket = PUBLISHDecoder.decode(PUBLISH(
+    val publish = PUBLISHDecoder.decode(PUBLISH(
       true, INT(2),
       true,
       STRING("test/topic"),
@@ -96,16 +96,16 @@ class PublishTest extends FunSuite {
     ).encode
     )
 
-    assert(connectPacket.dup == true)
-    assert(connectPacket.qos == INT(2))
-    assert(connectPacket.retain == true)
-    assert(connectPacket.packetId === INT(40293.toShort))
-    assert(connectPacket.topic === STRING("test/topic"))
-    assert(connectPacket.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
+    assert(publish.dup == true)
+    assert(publish.qos == INT(2))
+    assert(publish.retain == true)
+    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.topic === STRING("test/topic"))
+    assert(publish.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
   }
 
   test("encode/decode publish packet - empty payload") {
-    val connectPacket = PUBLISHDecoder.decode(
+    val publish = PUBLISHDecoder.decode(
       PUBLISH(
         false, INT(3),
         false,
@@ -115,66 +115,58 @@ class PublishTest extends FunSuite {
       ).encode
     )
 
-    assert(connectPacket.dup == false)
-    assert(connectPacket.qos == INT(3))
-    assert(connectPacket.retain == false)
-    assert(connectPacket.packetId === INT(40293.toShort))
-    assert(connectPacket.topic === STRING("test/topic"))
-    assert(connectPacket.payload.encode === PUBLISHPAYLOAD(Array()).encode)
+    assert(publish.dup == false)
+    assert(publish.qos == INT(3))
+    assert(publish.retain == false)
+    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.topic === STRING("test/topic"))
+    assert(publish.payload.encode === PUBLISHPAYLOAD(Array()).encode)
   }
 
   test("create puback packet") {
-    val connectPacket = PUBACK(INT(40293.toShort))
-    assert(connectPacket.packetId === INT(40293.toShort))
-
+    val puback = PUBACK(INT(40293.toShort))
+    assert(puback.packetId === INT(40293.toShort))
   }
 
 
   test("encode/decode puback packet") {
-    val connectPacket = PUBACKDecoder.decode(PUBACK(INT(40293.toShort)).encode)
-    assert(connectPacket.packetId === INT(40293.toShort))
-
+    val puback = PUBACKDecoder.decode(PUBACK(INT(40293.toShort)).encode)
+    assert(puback.packetId === INT(40293.toShort))
   }
 
 
   test("create pubrec packet") {
-    val connectPacket = PUBREC(INT(40293.toShort))
-    assert(connectPacket.packetId === INT(40293.toShort))
-
+    val pubrec = PUBREC(INT(40293.toShort))
+    assert(pubrec.packetId === INT(40293.toShort))
   }
 
 
   test("encode/decode pubrec packet") {
-    val connectPacket = PUBRECDecoder.decode(PUBREC(INT(40293.toShort)).encode)
-    assert(connectPacket.packetId === INT(40293.toShort))
-
+    val pubrec = PUBRECDecoder.decode(PUBREC(INT(40293.toShort)).encode)
+    assert(pubrec.packetId === INT(40293.toShort))
   }
 
 
   test("create pubrel packet") {
-    val connectPacket = PUBREL(INT(40293.toShort))
-    assert(connectPacket.packetId === INT(40293.toShort))
-
+    val pubrel = PUBREL(INT(40293.toShort))
+    assert(pubrel.packetId === INT(40293.toShort))
   }
 
 
   test("encode/decode pubrel packet") {
-    val connectPacket = PUBRELDecoder.decode(PUBREL(INT(40293.toShort)).encode)
-    assert(connectPacket.packetId === INT(40293.toShort))
-
+    val pubrel = PUBRELDecoder.decode(PUBREL(INT(40293.toShort)).encode)
+    assert(pubrel.packetId === INT(40293.toShort))
   }
 
   test("create pubcomb packet") {
-    val connectPacket = PUBCOMB(INT(40293.toShort))
-    assert(connectPacket.packetId === INT(40293.toShort))
-
+    val pubcomb = PUBCOMB(INT(40293.toShort))
+    assert(pubcomb.packetId === INT(40293.toShort))
   }
 
 
   test("encode/decode pubcomb packet") {
-    val connectPacket = PUBCOMBDecoder.decode(PUBCOMB(INT(40293.toShort)).encode)
-    assert(connectPacket.packetId === INT(40293.toShort))
-
+    val pubcomb = PUBCOMBDecoder.decode(PUBCOMB(INT(40293.toShort)).encode)
+    assert(pubcomb.packetId === INT(40293.toShort))
   }
 
 }
