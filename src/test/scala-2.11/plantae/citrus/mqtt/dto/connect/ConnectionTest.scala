@@ -1,9 +1,9 @@
-package plantae.citrus.mqtt.dto
+package plantae.citrus.mqtt.dto.connect
 
 import org.junit.runner.RunWith
 import org.scalatest.FunSuite
 import org.scalatest.junit.JUnitRunner
-import plantae.citrus.mqtt.dto.connect._
+import plantae.citrus.mqtt.dto.{INT, STRING}
 
 @RunWith(classOf[JUnitRunner])
 class ConnectionTest extends FunSuite {
