@@ -1,5 +1,8 @@
 package plantae.citrus.mqtt.dto
 
+import plantae.citrus.mqtt.dto.connect._
+import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGREQDecoder}
+
 trait PacketComponent {
   def usedByte: Int
 
@@ -65,3 +68,12 @@ case object ControlPacketType {
   val RESERVED_F = BYTE(0xf) << 4
 }
 
+object PacketDecoder {
+  def decode(data: Array[Byte]) : Packet = {
+    BYTE(data(0)) match {
+      case ControlPacketType.CONNECT => CONNECTDecoder.decode(data)
+      case ControlPacketType.PINGREQ => PINGREQDecoder.decode(data)
+      case ControlPacketType.DISCONNECT => DISCONNECTDecoder.decode(data)
+    }
+  }
+}

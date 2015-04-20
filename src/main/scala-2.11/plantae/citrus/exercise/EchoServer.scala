@@ -14,6 +14,8 @@ object EchoServer extends App{
 
   val paho = system.actorOf(Props[PahoClient], name = "mqttClient")
   paho ! CONNECT_MQTT
+  Thread.sleep(10000)
+  paho ! DISCONNECT_MQTT
 
 }
 
@@ -32,7 +34,7 @@ class EchoServer extends Actor {
     case CommandFailed(_: Bind) => context stop self
 
     case c @ Connected(remote, local) =>
-      println("connected!!!")
+
       val handler = context.actorOf(Props[EchoHandler])
       val connection = sender()
       connection ! Register(handler)
