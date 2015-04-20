@@ -174,3 +174,16 @@ object CONNACKDecoder {
     CONNACK(flags.toBoolean, returnCode)
   }
 }
+
+case object DISCONNECT extends Packet {
+  override val fixedHeader: FixedHeader = FixedHeader(ControlPacketType.DISCONNECT, REMAININGLENGTH(0))
+  override val variableHeader: VariableHeader = EMPTY_COMPONENT.EMPTY_VARIABLE_HEADER
+  override val payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
+  override val usedByte: Int = 0
+}
+
+object DISCONNECTDecoder {
+  def decode(bytes: Array[Byte]): Packet = {
+    DISCONNECT
+  }
+}
