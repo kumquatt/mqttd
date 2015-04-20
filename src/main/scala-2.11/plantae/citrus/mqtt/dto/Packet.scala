@@ -38,7 +38,7 @@ case class Payload(payloadElements: List[DataFormat]) extends PacketComponent {
   override def usedByte: Int = encode.length
 }
 
-
+// FIXME : it is useful but not look nice, How about using option for VariableHeader, Payload
 case object EMPTY_COMPONENT {
   val EMPTY_VARIABLE_HEADER = VariableHeader(List())
   val EMPTY_PAYLOAD = Payload(List())
