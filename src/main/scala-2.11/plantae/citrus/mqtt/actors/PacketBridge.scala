@@ -92,6 +92,7 @@ class SessionChecker extends Actor {
       case Some(x) =>
         if (connect.cleanSession) {
           x ! SessionCommand(SessionShutdown)
+
           createSession(connect, sender)
         } else sender ! Result(connect, x)
       case None => createSession(connect, sender)

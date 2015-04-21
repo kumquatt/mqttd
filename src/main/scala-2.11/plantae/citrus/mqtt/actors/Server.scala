@@ -25,7 +25,7 @@ class Server extends Actor {
   implicit val timeout = Timeout(5, java.util.concurrent.TimeUnit.SECONDS)
 
   def receive = {
-    case StartUpMessage(name) =>
+//    case StartUpMessage(name) =>
 
     case b@Bound(localAddress) =>
 
