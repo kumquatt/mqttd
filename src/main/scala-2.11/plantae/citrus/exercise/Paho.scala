@@ -11,35 +11,50 @@ object Paho extends App {
       option.setCleanSession(true)
       option.setKeepAliveInterval(10)
       client.connect(option)
+      client.subscribe("test")
+      client.subscribe("test1")
       //      Thread.sleep(3000)
       //      client.publish("test topic", "test payload bytes".getBytes(), 2, true)
 
     }
   }.start()
 
-  //    Thread.sleep(1000)
-  //    new Thread() {
-  //      override def run: Unit = {
-  //        var client = new MqttClient("tcp://localhost:8888", "customer_2").connect()
-  //
-  //      }
-  //    }.start()
-  //
-  //    Thread.sleep(1000)
-  //    new Thread() {
-  //      override def run: Unit = {
-  //        var client = new MqttClient("tcp://localhost:8888", "customer_3").connect()
-  //
-  //      }
-  //    }.start()
-  //
-  //    Thread.sleep(1000)
-  //    new Thread() {
-  //      override def run: Unit = {
-  //        var client = new MqttClient("tcp://localhost:8888", "customer_4").connect()
-  //
-  //      }
-  //    }.start()
+      Thread.sleep(1000)
+      new Thread() {
+        override def run: Unit = {
+          var client = new MqttClient("tcp://localhost:8888", "customer_2")
+
+          client.connect()
+          client.subscribe("test")
+          client.subscribe("test1")
+
+        }
+      }.start()
+
+      Thread.sleep(1000)
+      new Thread() {
+        override def run: Unit = {
+          var client = new MqttClient("tcp://localhost:8888", "customer_3")
+
+          client.connect()
+          client.subscribe("test")
+          client.subscribe("test1")
+
+        }
+      }.start()
+
+      Thread.sleep(1000)
+      new Thread() {
+        override def run: Unit = {
+          var client = new MqttClient("tcp://localhost:8888", "customer_4")
+
+
+          client.connect()
+          client.subscribe("test")
+          client.subscribe("test1")
+
+        }
+      }.start()
   while (true) {
     Thread.sleep(1000)
   }

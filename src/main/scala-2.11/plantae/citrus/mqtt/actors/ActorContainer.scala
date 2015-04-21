@@ -9,4 +9,5 @@ import com.typesafe.config.ConfigFactory
 object ActorContainer {
   val system = ActorSystem("mqtt", ConfigFactory.load.getConfig("mqtt"))
   val directory = system.actorOf(Props[Directory])
+  val topicDirectory = system.actorOf(Props[TopicDirectory])
 }

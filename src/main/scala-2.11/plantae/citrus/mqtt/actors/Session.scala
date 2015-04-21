@@ -1,12 +1,21 @@
 package plantae.citrus.mqtt.actors
 
-import akka.actor.{Cancellable, Actor, ActorRef, Props}
+import java.util.concurrent.TimeUnit
+
+import akka.actor.{Actor, ActorRef, Cancellable}
 import akka.event.Logging
-import plantae.citrus.mqtt.dto.Packet
+import akka.pattern.ask
 import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, ReturnCode, Will}
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
 import plantae.citrus.mqtt.dto.publish.PUBLISH
+import plantae.citrus.mqtt.dto.subscribe.{SUBSCRIBE, TopicFilter}
+import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBE
+import plantae.citrus.mqtt.dto.{Packet, STRING}
+
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
+
 /**
  * Created by yinjae on 15. 4. 21..
  */
@@ -32,12 +41,15 @@ case class SessionCreation(connect: CONNECT, senderOfSender: ActorRef)
 case class SessionCreationAck(connect: CONNECT, actor: ActorRef, senderOfSender: ActorRef)
 
 class Session extends Actor {
+  implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
+  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
   import ActorContainer.system.dispatcher
 
   private val logger = Logging(context.system, this)
   var will = Option[Will](null)
   var keepAlive = 60
-  var keepAliveTimer:Cancellable = null
+  var keepAliveTimer: Cancellable = null
+  var clientId: String = null
 
   override def postStop = {
     logger.info("post stop - shutdown session")
@@ -57,6 +69,7 @@ class Session extends Actor {
 
     case SessionCreation(connect, senderOfSender) => {
       logger.info("session create : " + self.toString())
+      clientId = connect.clientId.value
       (ActorContainer.directory ! Register(connect.clientId.value, sender, senderOfSender, connect))
     }
 
@@ -98,8 +111,61 @@ class Session extends Actor {
         logger.info("receive pingreq")
         sender ! MqttOutboundPacket(PINGRESP)
       case publish: PUBLISH =>
+
+      case subscribe: SUBSCRIBE =>
+        subscribeToTopics(subscribe.topicFilter)
+
+
+      case unsubscribe: UNSUBSCRIBE =>
+        unsubscribeToTopics(unsubscribe.topicFilter)
     }
 
+  }
+
+  def subscribeToTopics(topicFilters: List[TopicFilter]) = {
+    topicFilters.foreach(tp =>
+      (ActorContainer.topicDirectory ? TopicDirectoryReq(tp.topic)) onComplete {
+        case Success(TopicDirectoryResp(topicName, option: Option[ActorRef])) => option match {
+          case Some(topicActor) => {
+            logger.info("I will subscribe to actor({}) topicName({}) clientId({})",
+              topicActor, tp.topic.value, clientId
+            )
+            topicActor ! Subscribe(clientId)
+          }
+          case None => {
+            logger.info("No topic actor topicName({}) clientId({})", tp.topic.value, clientId)
+          }
+        }
+        case Failure(t) => {
+          logger.info("Ask failure topicName({}) clientId({})", tp.topic.value, clientId)
+          None
+        }
+      }
+
+    )
+
+  }
+
+  def unsubscribeToTopics(topics: List[STRING]) = {
+    topics.foreach(tp =>
+      (ActorContainer.topicDirectory ? TopicDirectoryReq(tp)) onComplete {
+        case Success(TopicDirectoryResp(topicName, option: Option[ActorRef])) => option match {
+          case Some(topicActor) => {
+            logger.info("I will unsubscribe to actor({}) topicName({}) clientId({})",
+              topicActor, tp.value, clientId
+            )
+            topicActor ! Unsubscribe(clientId)
+          }
+          case None => {
+            logger.info("No topic actor topicName({}) clientId({})", tp.value, clientId)
+          }
+        }
+        case Failure(t) => {
+          logger.info("Ask failure topicName({}) clientId({})", tp.value, clientId)
+          None
+        }
+      }
+    )
   }
 
   def doConnect(connect: CONNECT): CONNACK = {
