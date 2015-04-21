@@ -6,7 +6,6 @@ import akka.actor.{Props, Actor, ActorSystem}
 import akka.io.Tcp.{Close, Write, PeerClosed, Received}
 import akka.io.{IO, Tcp}
 import akka.util.ByteString
-
 import com.typesafe.config.ConfigFactory
 import plantae.citrus.exercise.{DISCONNECT_MQTT, CONNECT_MQTT, PahoClient, StartUpMessage}
 import plantae.citrus.mqtt.dto.PacketDecoder
@@ -21,8 +20,8 @@ object Kumquat {
   def main(args: Array[String]): Unit = {
 
 
-    val system = ActorSystem("kumquatt", ConfigFactory.load.getConfig("kumquatt.server"))
-    val server = system.actorOf(Props[KumquatServer], name = "kumquat")
+    val system = ActorSystem("kumquatt", ConfigFactory.load.getConfig("mqtt-broker"))
+    val server = system.actorOf(Props[KumquatServer], name = "kumquatt")
     server ! StartUpMessage
 
     val paho = system.actorOf(Props[PahoClient], name = "mqttClient")
