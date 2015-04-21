@@ -4,20 +4,20 @@ import akka.actor.Actor
 import akka.actor.Actor.Receive
 import org.eclipse.paho.client.mqttv3.{MqttMessage, MqttClient}
 
-case object CONNECT_MQTT
+case class CONNECT_MQTT(customerId : String)
 case object DISCONNECT_MQTT
 case object SUBSCRIBE_MQTT
 case object UNSUBSCRIBE_MQTT
 case object PUBLISH_MQTT
 
 class PahoClient extends Actor{
-  val client = new MqttClient("tcp://localhost:8888", "client_id")
+  val client = new MqttClient("tcp://localhost:8888", "client_id_3")
 
   def receive = {
-    case CONNECT_MQTT =>
+    case CONNECT_MQTT(customerId) =>
       println("Try to connect MQTT")
+      new MqttClient("tcp://localhost:8888", customerId).connect()
 
-      client.connect()
       println("mqtt connected? " + client.isConnected)
 
     case DISCONNECT_MQTT =>

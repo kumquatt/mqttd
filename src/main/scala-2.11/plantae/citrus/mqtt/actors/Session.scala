@@ -21,7 +21,9 @@ case object SessionPingReq
 
 case object SessionPingResp
 
-case object SessionShutdown
+case object SessionReset
+
+case object SessionResetAck
 
 case class SessionCreation(connect: CONNECT, senderOfSender: ActorRef)
 
@@ -32,11 +34,13 @@ class Session extends Actor {
   var will = Option[Will](null)
   var keepAlive = 60000
 
+  override def postStop = {
+    logger.info("post stop - shutdown session")
+  }
+
   override def receive: Receive = {
     case MqttInboundPacket(mqttPacket) => doMqttPacket(mqttPacket)
-
     case SessionCommand(command) => doSessionCommand(command)
-
     case RegisterAck(name, sender, senderOfSender, connect) => {
       logger.info("receive register ack")
       sender ! SessionCreationAck(connect, self, senderOfSender)
@@ -45,16 +49,23 @@ class Session extends Actor {
   }
 
   def doSessionCommand(command: AnyRef): Unit = command match {
+
     case SessionCreation(connect, senderOfSender) => {
       logger.info("session create : " + self.toString())
       (ActorContainer.directory ! Register(connect.clientId.value, sender, senderOfSender, connect))
     }
-    case SessionShutdown => {
+
+    case SessionReset => {
       logger.info("session shutdown : " + self.toString())
-      context.stop(self)
+      keepAlive = 60000
+      will = None
+      sender ! SessionResetAck
     }
 
-    case SessionPingReq => sender ! SessionPingResp
+    case SessionPingReq => {
+      logger.info("session ping request")
+      sender ! SessionPingResp
+    }
   }
 
   def doMqttPacket(packet: Packet): Unit = {
@@ -63,8 +74,10 @@ class Session extends Actor {
         logger.info("receive connect")
         will = connect.will
         keepAlive = connect.keepAlive.value
+
         sender ! MqttOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
       case PINGREQ =>
+
         logger.info("receive pingreq")
         sender ! MqttOutboundPacket(PINGRESP)
       case publish: PUBLISH =>
