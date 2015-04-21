@@ -38,5 +38,6 @@ class EchoServer extends Actor {
       val handler = context.actorOf(Props[EchoHandler])
       val connection = sender()
       connection ! Register(handler)
+
   }
 }
