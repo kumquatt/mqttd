@@ -1,7 +1,8 @@
 package plantae.citrus.mqtt.dto
 
 import plantae.citrus.mqtt.dto.connect._
-import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGREQDecoder}
+import plantae.citrus.mqtt.dto.ping.PINGREQDecoder
+import plantae.citrus.mqtt.dto.publish.PUBLISHDecoder
 
 trait PacketComponent {
   def usedByte: Int
@@ -69,11 +70,12 @@ case object ControlPacketType {
 }
 
 object PacketDecoder {
-  def decode(data: Array[Byte]) : Packet = {
-    BYTE(data(0)) match {
+  def decode(data: Array[Byte]): Packet = {
+    BYTE(data(0)) & BYTE(0xF0.toByte) match {
       case ControlPacketType.CONNECT => CONNECTDecoder.decode(data)
       case ControlPacketType.PINGREQ => PINGREQDecoder.decode(data)
       case ControlPacketType.DISCONNECT => DISCONNECTDecoder.decode(data)
+      case ControlPacketType.PUBLISH => PUBLISHDecoder.decode(data)
     }
   }
 }
