@@ -9,6 +9,7 @@ object Paho extends App {
       var option = new MqttConnectOptions()
       var client = new MqttClient("tcp://localhost:8888", "customer_1")
       option.setCleanSession(true)
+      option.setKeepAliveInterval(10)
       client.connect(option)
       //      Thread.sleep(3000)
       //      client.publish("test topic", "test payload bytes".getBytes(), 2, true)

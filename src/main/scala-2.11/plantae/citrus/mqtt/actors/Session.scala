@@ -1,12 +1,12 @@
 package plantae.citrus.mqtt.actors
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{Cancellable, Actor, ActorRef, Props}
 import akka.event.Logging
 import plantae.citrus.mqtt.dto.Packet
 import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, ReturnCode, Will}
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
 import plantae.citrus.mqtt.dto.publish.PUBLISH
-
+import scala.concurrent.duration._
 /**
  * Created by yinjae on 15. 4. 21..
  */
@@ -25,14 +25,19 @@ case object SessionReset
 
 case object SessionResetAck
 
+case object SessionKeepaliveTimeOut
+
 case class SessionCreation(connect: CONNECT, senderOfSender: ActorRef)
 
 case class SessionCreationAck(connect: CONNECT, actor: ActorRef, senderOfSender: ActorRef)
 
 class Session extends Actor {
+  import ActorContainer.system.dispatcher
+
   private val logger = Logging(context.system, this)
   var will = Option[Will](null)
-  var keepAlive = 60000
+  var keepAlive = 60
+  var keepAliveTimer:Cancellable = null
 
   override def postStop = {
     logger.info("post stop - shutdown session")
@@ -57,7 +62,7 @@ class Session extends Actor {
 
     case SessionReset => {
       logger.info("session shutdown : " + self.toString())
-      keepAlive = 60000
+      keepAlive = 60
       will = None
       sender ! SessionResetAck
     }
@@ -65,6 +70,10 @@ class Session extends Actor {
     case SessionPingReq => {
       logger.info("session ping request")
       sender ! SessionPingResp
+    }
+
+    case SessionKeepaliveTimeOut => {
+      logger.info("No keep alive request!!!!")
     }
   }
 
@@ -75,8 +84,16 @@ class Session extends Actor {
         will = connect.will
         keepAlive = connect.keepAlive.value
 
+        logger.info("Keepalive time is {}", keepAlive)
         sender ! MqttOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
+        keepAliveTimer = ActorContainer.system.scheduler.scheduleOnce(keepAlive second, self, SessionCommand(SessionKeepaliveTimeOut))
       case PINGREQ =>
+
+        if (keepAliveTimer != null) {
+          logger.info("Cancel the keepalivetimer and reset")
+          keepAliveTimer.cancel()
+        }
+        keepAliveTimer = ActorContainer.system.scheduler.scheduleOnce(keepAlive second, self, SessionCommand(SessionKeepaliveTimeOut))
 
         logger.info("receive pingreq")
         sender ! MqttOutboundPacket(PINGRESP)
