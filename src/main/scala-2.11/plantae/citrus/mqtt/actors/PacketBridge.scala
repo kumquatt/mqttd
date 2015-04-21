@@ -91,9 +91,8 @@ class SessionChecker extends Actor {
     case LoadResult(connect, options, sender) => options match {
       case Some(x) =>
         if (connect.cleanSession) {
-          x ! SessionCommand(SessionShutdown)
-
-          createSession(connect, sender)
+          sender ! SessionCommand(SessionReset)
+          logger.info("session reset")
         } else sender ! Result(connect, x)
       case None => createSession(connect, sender)
     }
@@ -110,7 +109,7 @@ class SessionChecker extends Actor {
       case Success(DirectoryResp(name, option)) => option match {
         case Some(session) =>
           logger.info("find previous session " + session)
-          (session ? SessionPingReq) onComplete {
+          (session ? SessionCommand(SessionPingReq)) onComplete {
             case Success(x) => {
               logger.info("previous session is valid " + session)
               self ! LoadResult(connect, Some(session), sender)
@@ -126,14 +125,13 @@ class SessionChecker extends Actor {
         }
       }
 
-
       case Failure(t) => self ! LoadResult(connect, None, sender)
     }
   }
 
   def createSession(connect: CONNECT, sender: ActorRef) = {
     logger.info("create new session " + connect.clientId.value)
-    val session = context.actorOf(Props[Session], connect.clientId.value)
+    val session = ActorContainer.system.actorOf(Props[Session], connect.clientId.value)
     session ! SessionCommand(SessionCreation(connect, sender))
   }
 }
