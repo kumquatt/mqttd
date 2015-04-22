@@ -1,41 +1,27 @@
 package plantae.citrus.mqtt.actors
 
+
 import java.util.concurrent.TimeUnit
 
-<<<<<<< HEAD
 import akka.actor.{Actor, ActorRef, Cancellable, Props}
 import akka.event.Logging
-import plantae.citrus.mqtt.dto.Packet
-import plantae.citrus.mqtt.dto.connect._
-import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
-import plantae.citrus.mqtt.dto.publish.PUBLISH
-
-import scala.concurrent.duration.FiniteDuration
-
-class SessionCreator extends Actor {
-  override def receive = {
-    case clientId: String => sender ! context.actorOf(Props[Session], clientId)
-  }
-}
-=======
-import akka.actor.{Actor, ActorRef, Cancellable}
-import akka.event.Logging
 import akka.pattern.ask
-import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, ReturnCode, Will}
+import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, DISCONNECT, ReturnCode, Will}
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
 import plantae.citrus.mqtt.dto.publish.PUBLISH
 import plantae.citrus.mqtt.dto.subscribe.{SUBSCRIBE, TopicFilter}
 import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBE
 import plantae.citrus.mqtt.dto.{Packet, STRING}
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
+import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success}
 
-/**
- * Created by yinjae on 15. 4. 21..
- */
->>>>>>> 81c10681884e05d8005978aad404136e67516114
+class SessionCreator extends Actor {
+  override def receive = {
+    case clientId: String => sender ! context.actorOf(Props[Session], clientId)
+  }
+}
+
 
 case class MqttInboundPacket(mqttPacket: Packet)
 
@@ -56,11 +42,8 @@ case object SessionKeepAliveTimeOut
 case object ConnectionClose
 
 class Session extends Actor {
-<<<<<<< HEAD
 
   private val logger = Logging(context.system, this)
-
-  import ActorContainer.system.dispatcher
 
   case class ConnectionStatus(will: Option[Will], keepAliveTime: Int)
 
@@ -70,17 +53,6 @@ class Session extends Actor {
   override def preStart = {
     ActorContainer.directory ! Register(self.path.name)
   }
-=======
-  implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
-  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
-  import ActorContainer.system.dispatcher
-
-  private val logger = Logging(context.system, this)
-  var will = Option[Will](null)
-  var keepAlive = 60
-  var keepAliveTimer: Cancellable = null
-  var clientId: String = null
->>>>>>> 81c10681884e05d8005978aad404136e67516114
 
   override def postStop = {
     ActorContainer.directory ! Remove(self.path.address.toString)
@@ -96,17 +68,8 @@ class Session extends Actor {
     case everythingElse => println(everythingElse)
   }
 
-<<<<<<< HEAD
-  def session(command: AnyRef): Unit = command match {
-=======
-  def doSessionCommand(command: AnyRef): Unit = command match {
 
-    case SessionCreation(connect, senderOfSender) => {
-      logger.info("session create : " + self.toString())
-      clientId = connect.clientId.value
-      (ActorContainer.directory ! Register(connect.clientId.value, sender, senderOfSender, connect))
-    }
->>>>>>> 81c10681884e05d8005978aad404136e67516114
+  def session(command: AnyRef): Unit = command match {
 
     case SessionReset => {
       logger.info("session reset : " + self.toString())
@@ -160,11 +123,9 @@ class Session extends Actor {
         logger.info("receive pingreq")
         bridge ! MqttOutboundPacket(PINGRESP)
       case publish: PUBLISH =>
-<<<<<<< HEAD
       case DISCONNECT => {
         cancelTimer
       }
-=======
 
       case subscribe: SUBSCRIBE =>
         subscribeToTopics(subscribe.topicFilter)
@@ -172,7 +133,6 @@ class Session extends Actor {
 
       case unsubscribe: UNSUBSCRIBE =>
         unsubscribeToTopics(unsubscribe.topicFilter)
->>>>>>> 81c10681884e05d8005978aad404136e67516114
     }
 
   }
@@ -183,16 +143,16 @@ class Session extends Actor {
         case Success(TopicDirectoryResp(topicName, option: Option[ActorRef])) => option match {
           case Some(topicActor) => {
             logger.info("I will subscribe to actor({}) topicName({}) clientId({})",
-              topicActor, tp.topic.value, clientId
+              topicActor, tp.topic.value, tp
             )
-            topicActor ! Subscribe(clientId)
+            topicActor ! Subscribe(self.path.name)
           }
           case None => {
-            logger.info("No topic actor topicName({}) clientId({})", tp.topic.value, clientId)
+            logger.info("No topic actor topicName({}) clientId({})", tp.topic.value, self.path.name)
           }
         }
         case Failure(t) => {
-          logger.info("Ask failure topicName({}) clientId({})", tp.topic.value, clientId)
+          logger.info("Ask failure topicName({}) clientId({})", tp.topic.value, self.path.name)
           None
         }
       }
@@ -207,16 +167,16 @@ class Session extends Actor {
         case Success(TopicDirectoryResp(topicName, option: Option[ActorRef])) => option match {
           case Some(topicActor) => {
             logger.info("I will unsubscribe to actor({}) topicName({}) clientId({})",
-              topicActor, tp.value, clientId
+              topicActor, tp.value, self.path.name
             )
-            topicActor ! Unsubscribe(clientId)
+            topicActor ! Unsubscribe(self.path.name)
           }
           case None => {
-            logger.info("No topic actor topicName({}) clientId({})", tp.value, clientId)
+            logger.info("No topic actor topicName({}) clientId({})", tp.value, self.path.name)
           }
         }
         case Failure(t) => {
-          logger.info("Ask failure topicName({}) clientId({})", tp.value, clientId)
+          logger.info("Ask failure topicName({}) clientId({})", tp.value, self.path.name)
           None
         }
       }

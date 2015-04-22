@@ -1,7 +1,8 @@
 package plantae.citrus.mqtt.actors
 
-import akka.actor.{ActorRef, Actor}
+import akka.actor.{Actor, ActorRef}
 import akka.event.Logging
+
 import scala.collection.mutable.Map
 
 case class Subscribe(clientId: String)
@@ -12,7 +13,7 @@ case object ClearList
 
 case class TopicMessage(msg: String)
 
-class Topic(topicName: String) extends Actor{
+class Topic(topicName: String) extends Actor {
 
   private val logger = Logging(context.system, this)
 
