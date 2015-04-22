@@ -3,9 +3,12 @@ package plantae.citrus.mqtt.dto.publish
 import plantae.citrus.mqtt.dto.Decoder.ByteStream
 import plantae.citrus.mqtt.dto._
 
-case class PUBLISH(dup: Boolean, qos: INT, retain: Boolean, topic: STRING, packetId: INT, data: PUBLISHPAYLOAD) extends Packet {
+case class PUBLISH(dup: Boolean, qos: INT, retain: Boolean, topic: STRING, packetId: Option[INT], data: PUBLISHPAYLOAD) extends Packet {
 
-  override def variableHeader: VariableHeader = VariableHeader(List(topic, packetId))
+  override def variableHeader: VariableHeader = VariableHeader(packetId match {
+    case Some(x) => List(topic, x)
+    case None => List(topic)
+  })
 
   override def payload: Payload = Payload(List(data))
 
@@ -88,8 +91,17 @@ object PUBLISHDecoder {
       throw new Error
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
     val topic = Decoder.decodeSTRING(stream)
-    val packetId = Decoder.decodeINT(stream)
-    val payload = Decoder.decodePUBLISHPAYLOAD(stream, remainingLength.value - topic.usedByte - packetId.usedByte)
+    val packetId = {
+      if (((typeAndFlag & qosBit) >> 1).toINT > 0)
+        Some(Decoder.decodeINT(stream))
+      else None
+    }
+    val payload = Decoder.decodePUBLISHPAYLOAD(stream, remainingLength.value - topic.usedByte - {
+      packetId match {
+        case Some(x) => x.usedByte
+        case None => 0
+      }
+    })
     PUBLISH((typeAndFlag & dupBit).toBoolean, ((typeAndFlag & qosBit) >> 1).toINT, (typeAndFlag & retainBit).toBoolean, topic, packetId, payload)
   }
 }
