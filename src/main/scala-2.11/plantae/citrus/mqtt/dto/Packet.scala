@@ -3,6 +3,8 @@ package plantae.citrus.mqtt.dto
 import plantae.citrus.mqtt.dto.connect._
 import plantae.citrus.mqtt.dto.ping.PINGREQDecoder
 import plantae.citrus.mqtt.dto.publish.PUBLISHDecoder
+import plantae.citrus.mqtt.dto.subscribe.SUBSCRIBEDecoder
+import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBEDecoder
 
 trait PacketComponent {
   def usedByte: Int
@@ -76,6 +78,8 @@ object PacketDecoder {
       case ControlPacketType.PINGREQ => PINGREQDecoder.decode(data)
       case ControlPacketType.DISCONNECT => DISCONNECTDecoder.decode(data)
       case ControlPacketType.PUBLISH => PUBLISHDecoder.decode(data)
+      case ControlPacketType.SUBSCRIBE => SUBSCRIBEDecoder.decode(data)
+      case ControlPacketType.UNSUBSCRIBE => UNSUBSCRIBEDecoder.decode(data)
     }
   }
 }
