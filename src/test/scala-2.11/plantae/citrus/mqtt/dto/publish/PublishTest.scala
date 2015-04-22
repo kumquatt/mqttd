@@ -13,17 +13,17 @@ class PublishTest extends FunSuite {
   test("create publish packet") {
     val publish =
       PUBLISH(
-        false, INT(3),
+        false, INT(1),
         false,
         STRING("test/topic"),
-        INT(40293.toShort),
+        Some(INT(40293.toShort)),
         PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte))
       )
 
     assert(publish.dup == false)
-    assert(publish.qos == INT(3))
+    assert(publish.qos == INT(1))
     assert(publish.retain == false)
-    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.packetId === Some(INT(40293.toShort)))
     assert(publish.topic === STRING("test/topic"))
     assert(publish.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
   }
@@ -35,14 +35,14 @@ class PublishTest extends FunSuite {
         true, INT(2),
         true,
         STRING("test/topic"),
-        INT(40293.toShort),
+        Some(INT(40293.toShort)),
         PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte))
       )
 
     assert(publish.dup == true)
     assert(publish.qos == INT(2))
     assert(publish.retain == true)
-    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.packetId === Some(INT(40293.toShort)))
     assert(publish.topic === STRING("test/topic"))
     assert(publish.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
   }
@@ -50,17 +50,17 @@ class PublishTest extends FunSuite {
   test("create publish packet - empty payload") {
     val publish =
       PUBLISH(
-        false, INT(3),
+        false, INT(0),
         false,
         STRING("test/topic"),
-        INT(40293.toShort),
+        None,
         PUBLISHPAYLOAD(Array())
       )
 
     assert(publish.dup == false)
-    assert(publish.qos == INT(3))
+    assert(publish.qos == INT(0))
     assert(publish.retain == false)
-    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.packetId === None)
     assert(publish.topic === STRING("test/topic"))
     assert(publish.payload.encode === PUBLISHPAYLOAD(Array()).encode)
   }
@@ -69,18 +69,18 @@ class PublishTest extends FunSuite {
   test("encode/decode publish packet") {
     val publish = PUBLISHDecoder.decode(
       PUBLISH(
-        false, INT(3),
+        false, INT(0),
         false,
         STRING("test/topic"),
-        INT(40293.toShort),
+        None,
         PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte))
       ).encode
     )
 
     assert(publish.dup == false)
-    assert(publish.qos == INT(3))
+    assert(publish.qos == INT(0))
     assert(publish.retain == false)
-    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.packetId === None)
     assert(publish.topic === STRING("test/topic"))
     assert(publish.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
   }
@@ -91,7 +91,7 @@ class PublishTest extends FunSuite {
       true, INT(2),
       true,
       STRING("test/topic"),
-      INT(40293.toShort),
+      Some(INT(40293.toShort)),
       PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte))
     ).encode
     )
@@ -99,7 +99,7 @@ class PublishTest extends FunSuite {
     assert(publish.dup == true)
     assert(publish.qos == INT(2))
     assert(publish.retain == true)
-    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.packetId === Some(INT(40293.toShort)))
     assert(publish.topic === STRING("test/topic"))
     assert(publish.payload.encode === PUBLISHPAYLOAD(Array(0x1.toByte, 0x2.toByte, 0x3.toByte, 0x4.toByte, 0x5.toByte)).encode)
   }
@@ -110,7 +110,7 @@ class PublishTest extends FunSuite {
         false, INT(3),
         false,
         STRING("test/topic"),
-        INT(40293.toShort),
+        Some(INT(40293.toShort)),
         PUBLISHPAYLOAD(Array())
       ).encode
     )
@@ -118,7 +118,7 @@ class PublishTest extends FunSuite {
     assert(publish.dup == false)
     assert(publish.qos == INT(3))
     assert(publish.retain == false)
-    assert(publish.packetId === INT(40293.toShort))
+    assert(publish.packetId === Some(INT(40293.toShort)))
     assert(publish.topic === STRING("test/topic"))
     assert(publish.payload.encode === PUBLISHPAYLOAD(Array()).encode)
   }
