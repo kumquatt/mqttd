@@ -1,15 +1,21 @@
 package plantae.citrus.mqtt.actors
 
-import akka.actor.{Cancellable, Actor, ActorRef, Props}
+import java.util.concurrent.TimeUnit
+
+import akka.actor.{Actor, ActorRef, Cancellable, Props}
 import akka.event.Logging
 import plantae.citrus.mqtt.dto.Packet
-import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, ReturnCode, Will}
+import plantae.citrus.mqtt.dto.connect._
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
 import plantae.citrus.mqtt.dto.publish.PUBLISH
-import scala.concurrent.duration._
-/**
- * Created by yinjae on 15. 4. 21..
- */
+
+import scala.concurrent.duration.FiniteDuration
+
+class SessionCreator extends Actor {
+  override def receive = {
+    case clientId: String => sender ! context.actorOf(Props[Session], clientId)
+  }
+}
 
 case class MqttInboundPacket(mqttPacket: Packet)
 
@@ -25,45 +31,44 @@ case object SessionReset
 
 case object SessionResetAck
 
-case object SessionKeepaliveTimeOut
+case object SessionKeepAliveTimeOut
 
-case class SessionCreation(connect: CONNECT, senderOfSender: ActorRef)
-
-case class SessionCreationAck(connect: CONNECT, actor: ActorRef, senderOfSender: ActorRef)
+case object ConnectionClose
 
 class Session extends Actor {
-  import ActorContainer.system.dispatcher
 
   private val logger = Logging(context.system, this)
-  var will = Option[Will](null)
-  var keepAlive = 60
-  var keepAliveTimer:Cancellable = null
+
+  import ActorContainer.system.dispatcher
+
+  case class ConnectionStatus(will: Option[Will], keepAliveTime: Int)
+
+  var connectionStatus: Option[ConnectionStatus] = None
+  var keepAliveTimer: Option[Cancellable] = None
+
+  override def preStart = {
+    ActorContainer.directory ! Register(self.path.name)
+  }
 
   override def postStop = {
+    ActorContainer.directory ! Remove(self.path.address.toString)
     logger.info("post stop - shutdown session")
   }
 
   override def receive: Receive = {
-    case MqttInboundPacket(mqttPacket) => doMqttPacket(mqttPacket)
-    case SessionCommand(command) => doSessionCommand(command)
-    case RegisterAck(name, sender, senderOfSender, connect) => {
+    case MqttInboundPacket(packet) => mqttPacket(packet, sender)
+    case SessionCommand(command) => session(command)
+    case RegisterAck(name) => {
       logger.info("receive register ack")
-      sender ! SessionCreationAck(connect, self, senderOfSender)
     }
     case everythingElse => println(everythingElse)
   }
 
-  def doSessionCommand(command: AnyRef): Unit = command match {
-
-    case SessionCreation(connect, senderOfSender) => {
-      logger.info("session create : " + self.toString())
-      (ActorContainer.directory ! Register(connect.clientId.value, sender, senderOfSender, connect))
-    }
+  def session(command: AnyRef): Unit = command match {
 
     case SessionReset => {
-      logger.info("session shutdown : " + self.toString())
-      keepAlive = 60
-      will = None
+      logger.info("session reset : " + self.toString())
+      connectionStatus = None
       sender ! SessionResetAck
     }
 
@@ -72,40 +77,55 @@ class Session extends Actor {
       sender ! SessionPingResp
     }
 
-    case SessionKeepaliveTimeOut => {
+    case SessionKeepAliveTimeOut => {
       logger.info("No keep alive request!!!!")
+    }
+    case ConnectionClose => {
+      //TODO : will process handling
+      connectionStatus = None
+    }
+
+  }
+
+  def cancelTimer = {
+    keepAliveTimer match {
+      case Some(x) => if (x.isCancelled) x.cancel()
+      case None =>
     }
   }
 
-  def doMqttPacket(packet: Packet): Unit = {
+  def resetTimer = {
+    cancelTimer
+    connectionStatus match {
+      case Some(x) =>
+        keepAliveTimer = Some(ActorContainer.system.scheduler.scheduleOnce(
+          FiniteDuration(x.keepAliveTime, TimeUnit.SECONDS), self, SessionCommand(SessionKeepAliveTimeOut))
+        )
+      case None =>
+    }
+  }
+
+  def mqttPacket(packet: Packet, bridge: ActorRef): Unit = {
+
     packet match {
       case connect: CONNECT =>
         logger.info("receive connect")
-        will = connect.will
-        keepAlive = connect.keepAlive.value
-
-        logger.info("Keepalive time is {}", keepAlive)
-        sender ! MqttOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
-        keepAliveTimer = ActorContainer.system.scheduler.scheduleOnce(keepAlive second, self, SessionCommand(SessionKeepaliveTimeOut))
+        connectionStatus = Some(ConnectionStatus(connect.will, connect.keepAlive.value))
+        bridge ! MqttOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
+        resetTimer
       case PINGREQ =>
-
-        if (keepAliveTimer != null) {
-          logger.info("Cancel the keepalivetimer and reset")
-          keepAliveTimer.cancel()
-        }
-        keepAliveTimer = ActorContainer.system.scheduler.scheduleOnce(keepAlive second, self, SessionCommand(SessionKeepaliveTimeOut))
-
+        resetTimer
         logger.info("receive pingreq")
-        sender ! MqttOutboundPacket(PINGRESP)
+        bridge ! MqttOutboundPacket(PINGRESP)
       case publish: PUBLISH =>
+      case DISCONNECT => {
+        cancelTimer
+      }
     }
 
   }
 
   def doConnect(connect: CONNECT): CONNACK = {
-    will = connect.will
-    keepAlive = connect.keepAlive.value
     CONNACK(true, ReturnCode.connectionAccepted)
   }
-
 }

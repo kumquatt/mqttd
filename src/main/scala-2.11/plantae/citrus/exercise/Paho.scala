@@ -8,9 +8,10 @@ object Paho extends App {
     override def run: Unit = {
       var option = new MqttConnectOptions()
       var client = new MqttClient("tcp://localhost:8888", "customer_1")
-      option.setCleanSession(true)
+//      option.setCleanSession(true)
       option.setKeepAliveInterval(10)
       client.connect(option)
+      println("connection success")
       //      Thread.sleep(3000)
       //      client.publish("test topic", "test payload bytes".getBytes(), 2, true)
 

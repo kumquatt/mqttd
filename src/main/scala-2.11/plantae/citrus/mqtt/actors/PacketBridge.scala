@@ -1,13 +1,9 @@
 package plantae.citrus.mqtt.actors
 
-import java.util.concurrent.TimeUnit
-
 import akka.actor.{Actor, ActorRef, Props}
 import akka.event.Logging
-import akka.io.Tcp.{Close, PeerClosed, Received, Write}
-import akka.pattern.ask
+import akka.io.Tcp.{PeerClosed, Received, Write}
 import akka.util.ByteString
-import com.google.common.base.Throwables
 import plantae.citrus.mqtt.dto.PacketDecoder
 import plantae.citrus.mqtt.dto.connect._
 import plantae.citrus.mqtt.dto.ping._
@@ -15,37 +11,24 @@ import plantae.citrus.mqtt.dto.publish._
 import plantae.citrus.mqtt.dto.subscribe.SUBSCRIBE
 import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBE
 
-import scala.concurrent.ExecutionContext
-import scala.util.{Failure, Success}
-
 /**
  * Created by yinjae on 15. 4. 21..
  */
 class PacketBridge extends Actor {
   private val logger = Logging(context.system, this)
-  implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
-  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
-
-  var idx = 0
-  var will = Option[Will](null)
-  var keepAlive: Int = 1000 * 60
   var session: ActorRef = null
   var socket: ActorRef = null
 
   def receive = {
 
-    case Result(connect, sess) => {
-      logger.info("receive result " + self)
-      this.session = sess
-      this.session ! MqttInboundPacket(connect)
-      logger.info("session : " + session)
-    }
     case MqttOutboundPacket(packet) => {
+      logger.info("relay to TCP ")
       socket ! Write(ByteString(packet.encode))
     }
     case Received(data) => {
       PacketDecoder.decode(data.toArray[Byte]) match {
         case connect: CONNECT => {
+          logger.info("receive connect")
           socket = sender
           doSession(connect)
         }
@@ -61,78 +44,85 @@ class PacketBridge extends Actor {
       }
     }
     case PeerClosed => {
-      session ! PeerClosed
-      sender() ! Close
-      context.stop(self)
+      session ! SessionCommand(ConnectionClose)
     }
 
   }
 
   def doSession(connect: CONNECT) = {
-    context.actorOf(Props[SessionChecker]) ! Get(connect, self)
-  }
-
-
-}
-
-case class Get(connect: CONNECT, sender: ActorRef)
-
-case class Result(connect: CONNECT, actorRef: ActorRef)
-
-class SessionChecker extends Actor {
-  private val logger = Logging(context.system, this)
-  implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
-  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
-
-  case class LoadResult(connect: CONNECT, actorRef: Option[ActorRef], sender: ActorRef)
-
-  def receive = {
-    case Get(connect, sender) => loadIfExist(connect, sender)
-    case LoadResult(connect, options, sender) => options match {
-      case Some(x) =>
-        if (connect.cleanSession) {
-          sender ! SessionCommand(SessionReset)
-          logger.info("session reset")
-        } else sender ! Result(connect, x)
-      case None => createSession(connect, sender)
-    }
-    case SessionCreationAck(connect, session, sender) => {
-      logger.info("receive session creation ack self" + self)
-      logger.info("receive session creation ack sender" + sender)
-      sender ! Result(connect, session)
-    }
-  }
-
-  def loadIfExist(connect: CONNECT, sender: ActorRef) = {
-    val clientId = connect.clientId.value
-    (ActorContainer.directory ? DirectoryReq(clientId)) onComplete {
-      case Success(DirectoryResp(name, option)) => option match {
-        case Some(session) =>
-          logger.info("find previous session " + session)
-          (session ? SessionCommand(SessionPingReq)) onComplete {
-            case Success(x) => {
-              logger.info("previous session is valid " + session)
-              self ! LoadResult(connect, Some(session), sender)
-            }
-            case Failure(t) =>
-              logger.info("previous session is not valid " + Throwables.getStackTraceAsString(t))
-              self ! LoadResult(connect, None, sender)
-          }
-        case None => {
-          logger.info("can't previous session ")
-          self ! LoadResult(connect, None, sender)
-
+    val bridgeActor = self
+    context.actorOf(Props(classOf[SessionChecker], this)).tell(Get(connect.clientId.value, connect.cleanSession),
+      context.actorOf(Props(new Actor {
+        def receive = {
+          case clientSession: ActorRef =>
+            session = clientSession
+            session.tell(MqttInboundPacket(connect), bridgeActor)
+            logger.info("receive session : {}", clientSession)
+            context.stop(self)
         }
-      }
+      })))
+  }
 
-      case Failure(t) => self ! LoadResult(connect, None, sender)
+  case class Get(clientId: String, cleanSession: Boolean)
+
+  class SessionChecker extends Actor {
+    private val logger = Logging(context.system, this)
+
+    def receive = {
+      case Get(clientId, cleanSession) => {
+        val sessionChecker = self
+        val doSessionActor = sender
+
+        val returnActor = context.actorOf(Props(new Actor {
+          def receive = {
+            case session: ActorRef => doSessionActor ! session
+              logger.info("clientSession[{}] is passed to [{}]", session.path.name, doSessionActor.path.name)
+              context.stop(sessionChecker)
+          }
+        }))
+        ActorContainer.directory.tell(DirectoryReq(clientId), context.actorOf(Props(new Actor {
+          override def receive = {
+            case DirectoryResp(name, sessionOption) => {
+              logger.info("load success DirectoryService")
+
+              sessionOption match {
+                case None => {
+                  logger.info("not find previous session " + session)
+                  createSession(clientId, returnActor)
+                }
+                case Some(session) =>
+                  logger.info("find previous session " + session)
+                  session.tell(SessionCommand(SessionPingReq), context.actorOf(Props(new Actor {
+                    override def receive = {
+                      case SessionPingResp => {
+                        logger.info("previous session is valid " + session)
+                        if (cleanSession) {
+                          session ! SessionCommand(SessionReset)
+                        }
+                        returnActor ! session
+                      }
+                      case everythingElse => println(everythingElse)
+                    }
+                  })))
+              }
+            }
+          }
+        })))
+      }
+    }
+
+
+    def createSession(clientId: String, returnActor: ActorRef) = {
+      logger.info("create new session " + clientId)
+      ActorContainer.sessionCreator.tell(clientId,
+        context.actorOf(Props(new Actor {
+          override def receive = {
+            case session: ActorRef => returnActor ! session
+          }
+        }))
+      )
     }
   }
 
-  def createSession(connect: CONNECT, sender: ActorRef) = {
-    logger.info("create new session " + connect.clientId.value)
-    val session = ActorContainer.system.actorOf(Props[Session], connect.clientId.value)
-    session ! SessionCommand(SessionCreation(connect, sender))
-  }
 }
 
