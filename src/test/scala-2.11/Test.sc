@@ -8,3 +8,5 @@ BYTE(0x8) << 4
 BYTE(-126) >> 4
 
 BYTE(0x8) << 4
+BYTE(0x08) << 4
+BYTE(0x80.toByte)

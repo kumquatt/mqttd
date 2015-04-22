@@ -13,8 +13,8 @@ import plantae.citrus.mqtt.dto.subscribe.{SUBACK, SUBSCRIBE, TopicFilter}
 import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBE
 import plantae.citrus.mqtt.dto.{BYTE, Packet, STRING}
 
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext}
-import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success}
 
 
@@ -48,6 +48,7 @@ class Session extends DirectoryMonitorActor {
 
   var connectionStatus: Option[ConnectionStatus] = None
   var keepAliveTimer: Option[Cancellable] = None
+
 
   override def actorType: ActorType = SESSION
 
@@ -132,8 +133,13 @@ class Session extends DirectoryMonitorActor {
       }
 
       case subscribe: SUBSCRIBE =>
-        subscribeToTopics(subscribe.topicFilter)
-        sender ! MqttOutboundPacket(SUBACK(subscribe.packetId ,subscribe.topicFilter.foldRight(List[BYTE]())((x,accum) => BYTE(0x00) ::accum )))
+        val subscribeResult = subscribeToTopics(subscribe.topicFilter)
+
+        subscribeResult.foreach(b =>
+          logger.info("... " + b)
+        )
+        sender ! MqttOutboundPacket(SUBACK(subscribe.packetId, subscribeResult))
+      //        sender ! MqttOutboundPacket(SUBACK(subscribe.packetId ,subscribe.topicFilter.foldRight(List[BYTE]())((x,accum) => BYTE(0x00) ::accum )))
 
 
       case unsubscribe: UNSUBSCRIBE =>
@@ -142,16 +148,19 @@ class Session extends DirectoryMonitorActor {
 
   }
 
-  def subscribeToTopics(topicFilters: List[TopicFilter]) = {
+  def subscribeToTopics(topicFilters: List[TopicFilter]): List[BYTE] = {
     val clientId = self.path.name
-    topicFilters.foreach(tp =>
-      (ActorContainer.directory ? DirectoryReq(tp.topic.value, TOPIC)) onComplete {
-        case Success(DirectoryResp(topicName, option: Option[ActorRef])) => option match {
+
+    val result = topicFilters.map(tp => {
+      val result = Await.result(ActorContainer.directory ? DirectoryReq(tp.topic.value, TOPIC), Duration.Inf)
+      result match {
+        case DirectoryResp(topicName, option: Option[ActorRef]) => option match {
           case Some(topicActor) => {
             logger.info("I will subscribe to actor({}) topicName({}) clientId({})",
               topicActor, tp.topic.value, tp
             )
             topicActor ! Subscribe(self.path.name)
+            BYTE(0x00)
           }
           case None => {
             logger.info("No topic actor topicName({}) clientId({})", tp.topic.value, self.path.name)
@@ -160,14 +169,39 @@ class Session extends DirectoryMonitorActor {
                 case topic: ActorRef => topic ! Subscribe(clientId)
               }
             })))
+            BYTE(0x00)
           }
         }
-        case Failure(t) => {
-          logger.info("Ask failure topicName({}) clientId({})", tp.topic.value, self.path.name)
-        }
       }
-
+    }
     )
+
+    result
+
+    //    topicFilters.foreach(tp =>
+    //      (ActorContainer.directory ? DirectoryReq(tp.topic.value, TOPIC)) onComplete {
+    //        case Success(DirectoryResp(topicName, option: Option[ActorRef])) => option match {
+    //          case Some(topicActor) => {
+    //            logger.info("I will subscribe to actor({}) topicName({}) clientId({})",
+    //              topicActor, tp.topic.value, tp
+    //            )
+    //            topicActor ! Subscribe(self.path.name)
+    //          }
+    //          case None => {
+    //            logger.info("No topic actor topicName({}) clientId({})", tp.topic.value, self.path.name)
+    //            ActorContainer.topicCreator.tell(topicName, context.actorOf(Props(new Actor {
+    //              override def receive = {
+    //                case topic: ActorRef => topic ! Subscribe(clientId)
+    //              }
+    //            })))
+    //          }
+    //        }
+    //        case Failure(t) => {
+    //          logger.info("Ask failure topicName({}) clientId({})", tp.topic.value, self.path.name)
+    //        }
+    //      }
+    //
+    //    )
 
   }
 
@@ -197,4 +231,5 @@ class Session extends DirectoryMonitorActor {
     CONNACK(true, ReturnCode.connectionAccepted)
   }
 
+  //  override def actorType: ActorType = ???
 }
