@@ -15,7 +15,6 @@ import plantae.citrus.mqtt.dto.{BYTE, Packet, STRING}
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext}
-import scala.util.{Failure, Success}
 
 
 case class MqttInboundPacket(mqttPacket: Packet)
@@ -33,8 +32,13 @@ case object SessionKeepAliveTimeOut extends SessionCommand
 case object ClientCloseConnection extends SessionCommand
 
 class SessionCreator extends Actor {
+  private val logger = Logging(context.system, this)
+
   override def receive = {
-    case clientId: String => sender ! context.actorOf(Props[Session], clientId)
+    case clientId: String => {
+      logger.info("new session is created [{}]", clientId)
+      sender ! context.actorOf(Props[Session], clientId)
+    }
   }
 }
 
@@ -50,7 +54,7 @@ class Session extends DirectoryMonitorActor {
   var keepAliveTimer: Option[Cancellable] = None
 
 
-  override def actorType: ActorType = SESSION
+  override def actorType: ActorType = TypeSession
 
   override def receive: Receive = {
     case MqttInboundPacket(packet) => mqttPacket(packet, sender)
@@ -115,14 +119,11 @@ class Session extends DirectoryMonitorActor {
         bridge ! MqttOutboundPacket(PINGRESP)
       case publish: PUBLISH => {
         logger.info(" publish : {}", publish.topic.value)
-        ActorContainer.directory.tell(DirectoryReq(publish.topic.value, TOPIC),
+        ActorContainer.directory.tell(DirectoryReq(publish.topic.value, TypeTopic),
           context.actorOf(Props(new Actor {
             def receive = {
               case DirectoryResp(topicName, option) =>
-                option match {
-                  case Some(x) => x ! TopicMessage(publish.data.value, publish.qos.value, publish.retain)
-                  case None =>
-                }
+                option ! TopicMessage(publish.data.value, publish.qos.value, publish.retain)
             }
           }))
         )
@@ -151,85 +152,21 @@ class Session extends DirectoryMonitorActor {
   def subscribeToTopics(topicFilters: List[TopicFilter]): List[BYTE] = {
     val clientId = self.path.name
 
-    val result = topicFilters.map(tp => {
-      val result = Await.result(ActorContainer.directory ? DirectoryReq(tp.topic.value, TOPIC), Duration.Inf)
-      result match {
-        case DirectoryResp(topicName, option: Option[ActorRef]) => option match {
-          case Some(topicActor) => {
-            logger.info("I will subscribe to actor({}) topicName({}) clientId({})",
-              topicActor, tp.topic.value, tp
-            )
-            topicActor ! Subscribe(self.path.name)
-            BYTE(0x00)
-          }
-          case None => {
-            logger.info("No topic actor topicName({}) clientId({})", tp.topic.value, self.path.name)
-            ActorContainer.topicCreator.tell(topicName, context.actorOf(Props(new Actor {
-              override def receive = {
-                case topic: ActorRef => topic ! Subscribe(clientId)
-              }
-            })))
-            BYTE(0x00)
-          }
-        }
+    val result = topicFilters.map(tp =>
+      Await.result(ActorContainer.directory ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
+        case DirectoryResp(topicName, option) =>
+          option ! Subscribe(self.path.name)
+          BYTE(0x00)
       }
-    }
     )
-
     result
-
-    //    topicFilters.foreach(tp =>
-    //      (ActorContainer.directory ? DirectoryReq(tp.topic.value, TOPIC)) onComplete {
-    //        case Success(DirectoryResp(topicName, option: Option[ActorRef])) => option match {
-    //          case Some(topicActor) => {
-    //            logger.info("I will subscribe to actor({}) topicName({}) clientId({})",
-    //              topicActor, tp.topic.value, tp
-    //            )
-    //            topicActor ! Subscribe(self.path.name)
-    //          }
-    //          case None => {
-    //            logger.info("No topic actor topicName({}) clientId({})", tp.topic.value, self.path.name)
-    //            ActorContainer.topicCreator.tell(topicName, context.actorOf(Props(new Actor {
-    //              override def receive = {
-    //                case topic: ActorRef => topic ! Subscribe(clientId)
-    //              }
-    //            })))
-    //          }
-    //        }
-    //        case Failure(t) => {
-    //          logger.info("Ask failure topicName({}) clientId({})", tp.topic.value, self.path.name)
-    //        }
-    //      }
-    //
-    //    )
-
   }
 
   def unsubscribeToTopics(topics: List[STRING]) = {
-    topics.foreach(tp =>
-      (ActorContainer.directory ? DirectoryReq(tp.value, TOPIC)) onComplete {
-        case Success(DirectoryResp(topicName, option: Option[ActorRef])) => option match {
-          case Some(topicActor) => {
-            logger.info("I will unsubscribe to actor({}) topicName({}) clientId({})",
-              topicActor, tp.value, self.path.name
-            )
-            topicActor ! Unsubscribe(self.path.name)
-          }
-          case None => {
-            logger.info("No topic actor topicName({}) clientId({})", tp.value, self.path.name)
-          }
-        }
-        case Failure(t) => {
-          logger.info("Ask failure topicName({}) clientId({})", tp.value, self.path.name)
-          None
-        }
-      }
-    )
   }
 
   def doConnect(connect: CONNECT): CONNACK = {
     CONNACK(true, ReturnCode.connectionAccepted)
   }
 
-  //  override def actorType: ActorType = ???
 }

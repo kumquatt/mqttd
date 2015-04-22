@@ -1,6 +1,6 @@
 package plantae.citrus.mqtt.actors
 
-import akka.actor.{Actor, ActorRef, Terminated}
+import akka.actor.{Actor, ActorRef, Props, Terminated}
 import akka.event.Logging
 
 
@@ -14,13 +14,13 @@ case class RemoveAck(actorName: String)
 
 case class DirectoryReq(actorName: String, actorType: ActorType)
 
-case class DirectoryResp(actorName: String, actor: Option[ActorRef])
+case class DirectoryResp(actorName: String, actor: ActorRef)
 
 class ActorType
 
-case object SESSION extends ActorType
+case object TypeSession extends ActorType
 
-case object TOPIC extends ActorType
+case object TypeTopic extends ActorType
 
 trait DirectoryMonitorActor extends Actor {
   override def preStart = {
@@ -44,8 +44,8 @@ class Directory extends Actor {
       logger.info("register actor : " + name + "\t" + sender.path)
       context.watch(sender)
       actorType match {
-        case SESSION => sessionActorMap = sessionActorMap.updated(name, sender)
-        case TOPIC => topicActorMap = topicActorMap.updated(name, sender)
+        case TypeSession => sessionActorMap = sessionActorMap.updated(name, sender)
+        case TypeTopic => topicActorMap = topicActorMap.updated(name, sender)
       }
       sender() ! RegisterAck(name)
     }
@@ -55,19 +55,41 @@ class Directory extends Actor {
       context.unwatch(sender)
 
       actorType match {
-        case SESSION => sessionActorMap = sessionActorMap - name
-        case TOPIC => topicActorMap = topicActorMap - name
+        case TypeSession => sessionActorMap = sessionActorMap - name
+        case TypeTopic => topicActorMap = topicActorMap - name
       }
       sender() ! RemoveAck(name)
     }
 
     case DirectoryReq(name, actorType) => {
-      logger.info("directory request : " + name)
-      sender ! DirectoryResp(name, actorType match {
-        case SESSION => sessionActorMap.get(name)
-        case TOPIC => topicActorMap.get(name)
+      val originalSender = sender;
+
+      val returnActor = context.actorOf(Props(new Actor {
+        def receive = {
+          case newActor: ActorRef =>
+            originalSender ! DirectoryResp(name, newActor)
+            context.stop(self)
+        }
+      }))
+      actorType match {
+        case TypeSession => sessionActorMap.get(name) match {
+          case Some(x) => {
+            logger.info("load exist actor : {}", x.path)
+            returnActor ! x
+          }
+          case None => ActorContainer.sessionCreator.tell(name, returnActor)
+        }
+
+        case TypeTopic => topicActorMap.get(name) match {
+          case Some(x) => {
+            logger.info("load exist actor : {}", x.path)
+            returnActor ! x
+          }
+          case None => ActorContainer.topicCreator.tell(name, returnActor)
+        }
+
       }
-      )
+
     }
     case Terminated(x) => {
       println(x.path)
@@ -75,12 +97,12 @@ class Directory extends Actor {
         case "session" =>
           sessionActorMap.foreach(each => if (each._2 == x) {
             println(each._1 + "is terminated")
-            self ! Remove(each._1, SESSION)
+            self ! Remove(each._1, TypeSession)
           })
         case other =>
           topicActorMap.foreach(each => if (each._2 == x) {
             println(each._1 + "is terminated")
-            self ! Remove(each._1, TOPIC)
+            self ! Remove(each._1, TypeTopic)
           })
 
       }

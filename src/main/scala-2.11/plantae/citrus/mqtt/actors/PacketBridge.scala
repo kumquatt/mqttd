@@ -25,12 +25,24 @@ class PacketBridge extends Actor {
       logger.info("relay to TCP ")
       socket ! Write(ByteString(packet.encode))
     }
+
     case Received(data) => {
       PacketDecoder.decode(data.toArray[Byte]) match {
         case connect: CONNECT => {
           logger.info("receive connect")
           socket = sender
-          doSession(connect)
+          val bridgeActor = self
+          val get = Get(connect.clientId.value, connect.cleanSession)
+          context.actorOf(Props(classOf[SessionChecker], this)).tell(get,
+            context.actorOf(Props(new Actor {
+              def receive = {
+                case clientSession: ActorRef =>
+                  session = clientSession
+                  session.tell(MqttInboundPacket(connect), bridgeActor)
+                  logger.info("receive session : {}", clientSession)
+                  context.stop(self)
+              }
+            })))
         }
         case mqttPacket: PUBLISH => session ! MqttInboundPacket(mqttPacket)
         case mqttPacket: PUBACK => session ! MqttInboundPacket(mqttPacket)
@@ -74,47 +86,22 @@ class PacketBridge extends Actor {
         val sessionChecker = self
         val doSessionActor = sender
 
-        val returnActor = context.actorOf(Props(new Actor {
-          def receive = {
-            case session: ActorRef => doSessionActor ! session
-              logger.info("clientSession[{}] is passed to [{}]", session.path.name, doSessionActor.path.name)
-              context.stop(sessionChecker)
-          }
-        }))
-        ActorContainer.directory.tell(DirectoryReq(clientId, SESSION), context.actorOf(Props(new Actor {
+        ActorContainer.directory.tell(DirectoryReq(clientId, TypeSession), context.actorOf(Props(new Actor {
           override def receive = {
-            case DirectoryResp(name, sessionOption) => {
+            case DirectoryResp(name, getOrCreateSession) => {
               logger.info("load success DirectoryService")
-
-              sessionOption match {
-                case None => {
-                  logger.info("not find previous session " + session)
-                  createSession(clientId, returnActor)
-                }
-                case Some(session) =>
-                  logger.info("find previous session " + session)
-                  if (cleanSession) {
-                    session ! SessionReset
-                  }
-                  returnActor ! session
+              if (cleanSession) {
+                getOrCreateSession ! SessionReset
               }
+              logger.info("clientSession[{}] is passed to [{}]", getOrCreateSession.path.name, doSessionActor.path.name)
+              doSessionActor ! getOrCreateSession
+              context.stop(sessionChecker)
             }
           }
         })))
       }
     }
 
-
-    def createSession(clientId: String, returnActor: ActorRef) = {
-      logger.info("create new session " + clientId)
-      ActorContainer.sessionCreator.tell(clientId,
-        context.actorOf(Props(new Actor {
-          override def receive = {
-            case session: ActorRef => returnActor ! session
-          }
-        }))
-      )
-    }
   }
 
 }

@@ -14,8 +14,13 @@ case object ClearList
 case class TopicMessage(payload: Array[Byte], qos: Int, retain: Boolean)
 
 class TopicCreator extends Actor {
+  private val logger = Logging(context.system, this)
+
   override def receive = {
-    case topicName: String => sender ! context.actorOf(Props[Topic], topicName)
+    case topicName: String => {
+      logger.info("new topic is created [{}]", topicName)
+      sender ! context.actorOf(Props[Topic], topicName)
+    }
   }
 }
 
@@ -54,5 +59,5 @@ class Topic extends DirectoryMonitorActor {
     subscriberMap.foreach(s => logger.info("{},", s._1))
   }
 
-  override def actorType: ActorType = TOPIC
+  override def actorType: ActorType = TypeTopic
 }
