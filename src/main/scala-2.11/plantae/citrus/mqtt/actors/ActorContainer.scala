@@ -9,7 +9,7 @@ import com.typesafe.config.ConfigFactory
 object ActorContainer {
   val system = ActorSystem("mqtt", ConfigFactory.load.getConfig("mqtt"))
   val directory = system.actorOf(Props[Directory], "directory")
-  val topicDirectory = system.actorOf(Props[TopicDirectory])
   val sessionCreator = system.actorOf(Props[SessionCreator], "session")
+  val topicCreator = system.actorOf(Props[TopicCreator], "topic")
 }
 

@@ -3,18 +3,34 @@ package plantae.citrus.mqtt.actors
 
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{Actor, ActorRef, Cancellable, Props}
+import akka.actor._
 import akka.event.Logging
 import akka.pattern.ask
 import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, DISCONNECT, ReturnCode, Will}
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
 import plantae.citrus.mqtt.dto.publish.PUBLISH
-import plantae.citrus.mqtt.dto.subscribe.{SUBSCRIBE, TopicFilter}
+import plantae.citrus.mqtt.dto.subscribe.{SUBACK, SUBSCRIBE, TopicFilter}
 import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBE
-import plantae.citrus.mqtt.dto.{Packet, STRING}
+import plantae.citrus.mqtt.dto.{BYTE, Packet, STRING}
 
+import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success}
+
+
+case class MqttInboundPacket(mqttPacket: Packet)
+
+case class MqttOutboundPacket(mqttPacket: Packet)
+
+class SessionCommand
+
+case object SessionReset extends SessionCommand
+
+case object SessionResetAck extends SessionCommand
+
+case object SessionKeepAliveTimeOut extends SessionCommand
+
+case object ClientCloseConnection extends SessionCommand
 
 class SessionCreator extends Actor {
   override def receive = {
@@ -22,26 +38,9 @@ class SessionCreator extends Actor {
   }
 }
 
-
-case class MqttInboundPacket(mqttPacket: Packet)
-
-case class MqttOutboundPacket(mqttPacket: Packet)
-
-case class SessionCommand(command: AnyRef)
-
-case object SessionPingReq
-
-case object SessionPingResp
-
-case object SessionReset
-
-case object SessionResetAck
-
-case object SessionKeepAliveTimeOut
-
-case object ConnectionClose
-
-class Session extends Actor {
+class Session extends DirectoryMonitorActor {
+  implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
+  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
   private val logger = Logging(context.system, this)
 
@@ -50,18 +49,11 @@ class Session extends Actor {
   var connectionStatus: Option[ConnectionStatus] = None
   var keepAliveTimer: Option[Cancellable] = None
 
-  override def preStart = {
-    ActorContainer.directory ! Register(self.path.name)
-  }
-
-  override def postStop = {
-    ActorContainer.directory ! Remove(self.path.address.toString)
-    logger.info("post stop - shutdown session")
-  }
+  override def actorType: ActorType = SESSION
 
   override def receive: Receive = {
     case MqttInboundPacket(packet) => mqttPacket(packet, sender)
-    case SessionCommand(command) => session(command)
+    case command: SessionCommand => session(command)
     case RegisterAck(name) => {
       logger.info("receive register ack")
     }
@@ -69,7 +61,7 @@ class Session extends Actor {
   }
 
 
-  def session(command: AnyRef): Unit = command match {
+  def session(command: SessionCommand): Unit = command match {
 
     case SessionReset => {
       logger.info("session reset : " + self.toString())
@@ -77,16 +69,14 @@ class Session extends Actor {
       sender ! SessionResetAck
     }
 
-    case SessionPingReq => {
-      logger.info("session ping request")
-      sender ! SessionPingResp
-    }
-
     case SessionKeepAliveTimeOut => {
       logger.info("No keep alive request!!!!")
     }
-    case ConnectionClose => {
+
+    case ClientCloseConnection => {
       //TODO : will process handling
+      logger.info("ClientCloseConnection : " + self.toString())
+      cancelTimer
       connectionStatus = None
     }
 
@@ -94,7 +84,7 @@ class Session extends Actor {
 
   def cancelTimer = {
     keepAliveTimer match {
-      case Some(x) => if (x.isCancelled) x.cancel()
+      case Some(x) => x.cancel()
       case None =>
     }
   }
@@ -104,7 +94,7 @@ class Session extends Actor {
     connectionStatus match {
       case Some(x) =>
         keepAliveTimer = Some(ActorContainer.system.scheduler.scheduleOnce(
-          FiniteDuration(x.keepAliveTime, TimeUnit.SECONDS), self, SessionCommand(SessionKeepAliveTimeOut))
+          FiniteDuration(x.keepAliveTime, TimeUnit.SECONDS), self, SessionKeepAliveTimeOut)
         )
       case None =>
     }
@@ -122,13 +112,28 @@ class Session extends Actor {
         resetTimer
         logger.info("receive pingreq")
         bridge ! MqttOutboundPacket(PINGRESP)
-      case publish: PUBLISH =>
+      case publish: PUBLISH => {
+        logger.info(" publish : {}", publish.topic.value)
+        ActorContainer.directory.tell(DirectoryReq(publish.topic.value, TOPIC),
+          context.actorOf(Props(new Actor {
+            def receive = {
+              case DirectoryResp(topicName, option) =>
+                option match {
+                  case Some(x) => x ! TopicMessage(publish.data.value, publish.qos.value, publish.retain)
+                  case None =>
+                }
+            }
+          }))
+        )
+      }
       case DISCONNECT => {
+        connectionStatus = None
         cancelTimer
       }
 
       case subscribe: SUBSCRIBE =>
         subscribeToTopics(subscribe.topicFilter)
+        sender ! MqttOutboundPacket(SUBACK(subscribe.packetId ,subscribe.topicFilter.foldRight(List[BYTE]())((x,accum) => BYTE(0x00) ::accum )))
 
 
       case unsubscribe: UNSUBSCRIBE =>
@@ -138,9 +143,10 @@ class Session extends Actor {
   }
 
   def subscribeToTopics(topicFilters: List[TopicFilter]) = {
+    val clientId = self.path.name
     topicFilters.foreach(tp =>
-      (ActorContainer.topicDirectory ? TopicDirectoryReq(tp.topic)) onComplete {
-        case Success(TopicDirectoryResp(topicName, option: Option[ActorRef])) => option match {
+      (ActorContainer.directory ? DirectoryReq(tp.topic.value, TOPIC)) onComplete {
+        case Success(DirectoryResp(topicName, option: Option[ActorRef])) => option match {
           case Some(topicActor) => {
             logger.info("I will subscribe to actor({}) topicName({}) clientId({})",
               topicActor, tp.topic.value, tp
@@ -149,11 +155,15 @@ class Session extends Actor {
           }
           case None => {
             logger.info("No topic actor topicName({}) clientId({})", tp.topic.value, self.path.name)
+            ActorContainer.topicCreator.tell(topicName, context.actorOf(Props(new Actor {
+              override def receive = {
+                case topic: ActorRef => topic ! Subscribe(clientId)
+              }
+            })))
           }
         }
         case Failure(t) => {
           logger.info("Ask failure topicName({}) clientId({})", tp.topic.value, self.path.name)
-          None
         }
       }
 
@@ -163,8 +173,8 @@ class Session extends Actor {
 
   def unsubscribeToTopics(topics: List[STRING]) = {
     topics.foreach(tp =>
-      (ActorContainer.topicDirectory ? TopicDirectoryReq(tp)) onComplete {
-        case Success(TopicDirectoryResp(topicName, option: Option[ActorRef])) => option match {
+      (ActorContainer.directory ? DirectoryReq(tp.value, TOPIC)) onComplete {
+        case Success(DirectoryResp(topicName, option: Option[ActorRef])) => option match {
           case Some(topicActor) => {
             logger.info("I will unsubscribe to actor({}) topicName({}) clientId({})",
               topicActor, tp.value, self.path.name
@@ -186,4 +196,5 @@ class Session extends Actor {
   def doConnect(connect: CONNECT): CONNACK = {
     CONNACK(true, ReturnCode.connectionAccepted)
   }
+
 }

@@ -44,7 +44,8 @@ class PacketBridge extends Actor {
       }
     }
     case PeerClosed => {
-      session ! SessionCommand(ConnectionClose)
+      session ! ClientCloseConnection
+      context.stop(self)
     }
 
   }
@@ -80,7 +81,7 @@ class PacketBridge extends Actor {
               context.stop(sessionChecker)
           }
         }))
-        ActorContainer.directory.tell(DirectoryReq(clientId), context.actorOf(Props(new Actor {
+        ActorContainer.directory.tell(DirectoryReq(clientId, SESSION), context.actorOf(Props(new Actor {
           override def receive = {
             case DirectoryResp(name, sessionOption) => {
               logger.info("load success DirectoryService")
@@ -92,18 +93,10 @@ class PacketBridge extends Actor {
                 }
                 case Some(session) =>
                   logger.info("find previous session " + session)
-                  session.tell(SessionCommand(SessionPingReq), context.actorOf(Props(new Actor {
-                    override def receive = {
-                      case SessionPingResp => {
-                        logger.info("previous session is valid " + session)
-                        if (cleanSession) {
-                          session ! SessionCommand(SessionReset)
-                        }
-                        returnActor ! session
-                      }
-                      case everythingElse => println(everythingElse)
-                    }
-                  })))
+                  if (cleanSession) {
+                    session ! SessionReset
+                  }
+                  returnActor ! session
               }
             }
           }
