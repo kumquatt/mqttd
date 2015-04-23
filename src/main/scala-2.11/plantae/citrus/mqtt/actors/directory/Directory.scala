@@ -1,7 +1,8 @@
-package plantae.citrus.mqtt.actors
+package plantae.citrus.mqtt.actors.directory
 
 import akka.actor.{Actor, ActorRef, Props, Terminated}
 import akka.event.Logging
+import plantae.citrus.mqtt.actors._
 
 
 case class Register(actorName: String, actorType: ActorType)

@@ -1,16 +1,11 @@
-package plantae.citrus.mqtt.actors
+package plantae.citrus.mqtt.actors.connection
 
 import java.net.InetSocketAddress
 
-import akka.actor.{Actor, Props}
+import akka.actor.{Actor, ActorLogging, Props}
 import akka.io.{IO, Tcp}
-import plantae.citrus.exercise.StartUpMessage
 
-object Server extends App {
-  val actor = ActorContainer.system.actorOf(Props[Server], name = "broker")
-}
-
-class Server extends Actor {
+class Server extends Actor with ActorLogging {
 
   import Tcp._
   import akka.util.Timeout
@@ -25,14 +20,12 @@ class Server extends Actor {
   implicit val timeout = Timeout(5, java.util.concurrent.TimeUnit.SECONDS)
 
   def receive = {
-//    case StartUpMessage(name) =>
-
     case b@Bound(localAddress) =>
 
     case CommandFailed(_: Bind) => context stop self
 
     case c@Connected(remote, local) =>
-      println("new connection" + remote)
+      log.info("new connection" + remote)
       val handler = context.actorOf(Props[PacketBridge])
       val connection = sender()
       connection ! Register(handler)

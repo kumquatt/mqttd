@@ -1,6 +1,7 @@
-package plantae.citrus.mqtt.actors
+package plantae.citrus.mqtt.actors.topic
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import plantae.citrus.mqtt.actors.directory.{ActorType, DirectoryMonitorActor, TypeTopic}
 
 import scala.collection.mutable.Map
 

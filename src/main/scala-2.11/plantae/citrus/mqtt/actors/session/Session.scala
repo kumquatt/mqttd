@@ -1,5 +1,4 @@
-package plantae.citrus.mqtt.actors
-
+package plantae.citrus.mqtt.actors.session
 
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -7,6 +6,9 @@ import java.util.concurrent.TimeUnit
 import akka.actor._
 import akka.event.Logging
 import akka.pattern.ask
+import plantae.citrus.mqtt.actors._
+import plantae.citrus.mqtt.actors.directory._
+import plantae.citrus.mqtt.actors.topic.Subscribe
 import plantae.citrus.mqtt.dto._
 import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, DISCONNECT, ReturnCode, Will}
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
@@ -126,24 +128,24 @@ class Session extends DirectoryMonitorActor with ActorLogging {
       case mqtt: PUBREL =>
         context.child(PublishConstant.inboundPrefix + mqtt.packetId.value) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish inbound actor {}",PublishConstant.inboundPrefix + mqtt.packetId.value)
+          case None => log.error("can't find publish inbound actor {}", PublishConstant.inboundPrefix + mqtt.packetId.value)
         }
       case mqtt: PUBREC =>
         context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}",PublishConstant.inboundPrefix + mqtt.packetId.value)
+          case None => log.error("can't find publish outbound actor {}", PublishConstant.inboundPrefix + mqtt.packetId.value)
 
         }
       case mqtt: PUBACK =>
         context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}",PublishConstant.inboundPrefix + mqtt.packetId.value)
+          case None => log.error("can't find publish outbound actor {}", PublishConstant.inboundPrefix + mqtt.packetId.value)
 
         }
       case mqtt: PUBCOMB =>
         context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}",PublishConstant.inboundPrefix + mqtt.packetId.value)
+          case None => log.error("can't find publish outbound actor {}", PublishConstant.inboundPrefix + mqtt.packetId.value)
         }
 
       case DISCONNECT => {
@@ -188,84 +190,3 @@ class Session extends DirectoryMonitorActor with ActorLogging {
   }
 
 }
-
-
-//sealed trait data
-//
-//case object uninitialized extends data
-//
-//case class fromClient(data: Packet) extends data
-//
-//case class toClient(data: Packet) extends data
-//
-//sealed trait state
-//
-//case object waitPublish extends state
-//
-//case object waitTopicResponseQos1 extends state
-//
-//case object waitTopicResponseQos2 extends state
-//
-//case object waitPubRel extends state
-//
-//case object complete extends state
-//
-//class PublishProcessor(client: ActorRef) extends FSM[state, data] with ActorLogging {
-//  val processActor = self
-//  startWith(waitPublish, uninitialized)
-//
-//  when(waitPublish) {
-//    case Event(publish: PUBLISH, waitPublish) =>
-//      val relay = context.actorOf(Props(new Actor {
-//        override def receive = {
-//          case DirectoryResp(name, actor) =>
-//            actor.tell(TopicMessage(publish.data.value, publish.qos.value, publish.retain, publish.packetId match {
-//              case Some(x) => Some(x.value)
-//              case None => None
-//            }
-//            ), processActor)
-//        }
-//      }))
-//      ActorContainer.directory.tell(DirectoryReq(publish.topic.value, TypeTopic), relay)
-//
-//      publish.qos.value match {
-//        case 0 =>
-//          goto(complete)
-//        case 1 =>
-//          goto(waitTopicResponseQos1)
-//        case 2 =>
-//          goto(waitTopicResponseQos2)
-//      }
-//  }
-//
-//  when(waitTopicResponseQos1) {
-//    case Event(TopicMessageAck(packetId), waitPublish) =>
-//      client ! MqttOutboundPacket(PUBACK(INT(packetId.toShort)))
-//      goto(complete)
-//  }
-//
-//  when(waitTopicResponseQos2) {
-//    case Event(TopicMessageAck(packetId), waitPublish) =>
-//      client ! MqttOutboundPacket(PUBREC(INT(packetId.toShort)))
-//      goto(waitPubRel)
-//  }
-//
-//  when(waitPubRel) {
-//    case Event(PUBREL(packetId), waitPublish) =>
-//      client ! MqttOutboundPacket(PUBCOMB((packetId)))
-//      goto(complete) using toClient(PUBCOMB(packetId))
-//
-//  }
-//
-//  when(complete) {
-//    case anyCase => stop()
-//  }
-//
-//
-//  whenUnhandled {
-//    case e: Event =>
-//      goto(complete)
-//  }
-//
-//  initialize()
-//}

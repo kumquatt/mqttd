@@ -1,12 +1,15 @@
-package plantae.citrus.mqtt.actors
+package plantae.citrus.mqtt.actors.connection
 
 import java.util.concurrent.TimeUnit
 
 import akka.actor.{Actor, ActorRef, Props}
 import akka.event.Logging
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.io.Tcp.{PeerClosed, Received, Write}
+import akka.pattern.ask
 import akka.util.ByteString
+import plantae.citrus.mqtt.actors.ActorContainer
+import plantae.citrus.mqtt.actors.directory._
+import plantae.citrus.mqtt.actors.session.{MqttOutboundPacket, ClientCloseConnection, MqttInboundPacket, SessionReset}
 import plantae.citrus.mqtt.dto.PacketDecoder
 import plantae.citrus.mqtt.dto.connect._
 import plantae.citrus.mqtt.dto.ping._
@@ -14,15 +17,18 @@ import plantae.citrus.mqtt.dto.publish._
 import plantae.citrus.mqtt.dto.subscribe.SUBSCRIBE
 import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBE
 
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.{ExecutionContext, Await}
 import scala.concurrent.duration.Duration
-import akka.pattern.ask
 
 
 /**
  * Created by yinjae on 15. 4. 21..
  */
 class PacketBridge extends Actor {
+  implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
+  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
+
+
   private val logger = Logging(context.system, this)
   var session: ActorRef = null
   var socket: ActorRef = null
@@ -93,7 +99,7 @@ class PacketBridge extends Actor {
         val directoryProxyActor = ActorContainer.directoryProxyMaster
         val future = Await.result(directoryProxyActor ? GetDirectoryActor, Duration.Inf)
         future match {
-          case a : DirectoryActor =>
+          case a: DirectoryActor =>
             a.actor.tell(DirectoryReq(clientId, TypeSession), context.actorOf(Props(new Actor {
               override def receive = {
                 case DirectoryResp(name, getOrCreateSession) => {
@@ -111,5 +117,6 @@ class PacketBridge extends Actor {
       }
     }
   }
+
 }
 
