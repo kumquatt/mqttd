@@ -7,7 +7,7 @@ import plantae.citrus.mqtt.dto._
  * Created by yinjae on 15. 4. 20..
  */
 case class UNSUBSCRIBE(packetId: INT, topicFilter: List[STRING]) extends Packet {
-  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x0a) << 4, REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
+  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x0a) << 4 | BYTE(0x02), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
   override def variableHeader: VariableHeader = VariableHeader(List(packetId))
 
@@ -22,7 +22,7 @@ object UNSUBSCRIBEDecoder {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
 
-    if (typeAndFlag != (BYTE(0x0a) << 4))
+    if (typeAndFlag != (BYTE(0x0a) << 4 | BYTE(0x02)))
       throw new Error
 
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)

@@ -2,7 +2,7 @@ package plantae.citrus.mqtt.dto
 
 import plantae.citrus.mqtt.dto.connect._
 import plantae.citrus.mqtt.dto.ping.PINGREQDecoder
-import plantae.citrus.mqtt.dto.publish.PUBLISHDecoder
+import plantae.citrus.mqtt.dto.publish._
 import plantae.citrus.mqtt.dto.subscribe.SUBSCRIBEDecoder
 import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBEDecoder
 
@@ -46,6 +46,8 @@ case class Payload(payloadElements: List[DataFormat]) extends PacketComponent {
 
 // FIXME : it is useful but not look nice, How about using option for VariableHeader, Payload
 case object EMPTY_COMPONENT {
+  val EMPTY_FIXED_HEADER = FixedHeader(BYTE(0xFF.toByte), REMAININGLENGTH(0))
+
   val EMPTY_VARIABLE_HEADER = VariableHeader(List())
   val EMPTY_PAYLOAD = Payload(List())
 }
@@ -78,6 +80,11 @@ object PacketDecoder {
       case ControlPacketType.PINGREQ => PINGREQDecoder.decode(data)
       case ControlPacketType.DISCONNECT => DISCONNECTDecoder.decode(data)
       case ControlPacketType.PUBLISH => PUBLISHDecoder.decode(data)
+      case ControlPacketType.PUBACK => PUBACKDecoder.decode(data)
+      case ControlPacketType.PUBREC => PUBRECDecoder.decode(data)
+      case ControlPacketType.PUBREL => PUBRELDecoder.decode(data)
+      case ControlPacketType.PUBCOMP => PUBCOMBDecoder.decode(data)
+
       case ControlPacketType.SUBSCRIBE => SUBSCRIBEDecoder.decode(data)
       case ControlPacketType.UNSUBSCRIBE => UNSUBSCRIBEDecoder.decode(data)
     }

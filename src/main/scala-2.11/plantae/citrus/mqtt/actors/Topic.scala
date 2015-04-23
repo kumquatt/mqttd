@@ -1,7 +1,6 @@
 package plantae.citrus.mqtt.actors
 
-import akka.actor.{Actor, ActorRef, Props}
-import akka.event.Logging
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 
 import scala.collection.mutable.Map
 
@@ -11,52 +10,52 @@ case class Unsubscribe(clientId: String)
 
 case object ClearList
 
-case class TopicMessage(payload: Array[Byte], qos: Int, retain: Boolean)
+case class TopicMessage(payload: Array[Byte], qos: Int, retain: Boolean, packetId: Option[Int])
 
-class TopicCreator extends Actor {
-  private val logger = Logging(context.system, this)
+case object TopicMessageAck
+
+class TopicCreator extends Actor with ActorLogging {
 
   override def receive = {
     case topicName: String => {
-      logger.info("new topic is created [{}]", topicName)
+      log.info("new topic is created [{}]", topicName)
       sender ! context.actorOf(Props[Topic], topicName)
     }
   }
 }
 
-class Topic extends DirectoryMonitorActor {
-
-  private val logger = Logging(context.system, this)
+class Topic extends DirectoryMonitorActor with ActorLogging {
 
   val subscriberMap: Map[String, ActorRef] = Map()
 
   def receive = {
     case Subscribe(clientId) => {
-      logger.info("Subscribe client({}) topic({})", clientId, self.path.name)
+      log.info("Subscribe client({}) topic({})", clientId, self.path.name)
       subscriberMap.+=((clientId, sender))
       printEverySubscriber
     }
 
     case Unsubscribe(clientId) => {
-      logger.info("Unsubscribe client({}) topic({})", clientId, self.path.name)
+      log.info("Unsubscribe client({}) topic({})", clientId, self.path.name)
       subscriberMap.-(clientId)
       printEverySubscriber
     }
 
     case ClearList => {
-      logger.info("Clear subscriber list")
+      log.info("Clear subscriber list")
       subscriberMap.clear()
       printEverySubscriber
     }
 
-    case TopicMessage(payload, qos, retain) => {
-      logger.info("qos : {} , retain : {} , payload : {}", qos, retain, new String(payload))
+    case TopicMessage(payload, qos, retain, packetId) => {
+      log.info("qos : {} , retain : {} , payload : {} , sender {}", qos, retain, new String(payload), sender)
+      sender ! TopicMessageAck
     }
   }
 
   def printEverySubscriber = {
-    logger.info("{}'s subscriber ", self.path.name)
-    subscriberMap.foreach(s => logger.info("{},", s._1))
+    log.info("{}'s subscriber ", self.path.name)
+    subscriberMap.foreach(s => log.info("{},", s._1))
   }
 
   override def actorType: ActorType = TypeTopic

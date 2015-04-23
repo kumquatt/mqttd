@@ -3,7 +3,9 @@ package plantae.citrus.mqtt.dto.publish
 import plantae.citrus.mqtt.dto.Decoder.ByteStream
 import plantae.citrus.mqtt.dto._
 
-case class PUBLISH(dup: Boolean, qos: INT, retain: Boolean, topic: STRING, packetId: Option[INT], data: PUBLISHPAYLOAD) extends Packet {
+sealed trait MESSAGE extends Packet
+
+case class PUBLISH(dup: Boolean, qos: INT, retain: Boolean, topic: STRING, packetId: Option[INT], data: PUBLISHPAYLOAD) extends MESSAGE {
 
   override def variableHeader: VariableHeader = VariableHeader(packetId match {
     case Some(x) => List(topic, x)
@@ -33,7 +35,7 @@ case class PUBLISH(dup: Boolean, qos: INT, retain: Boolean, topic: STRING, packe
 }
 
 
-case class PUBACK(packetId: INT) extends Packet {
+case class PUBACK(packetId: INT) extends MESSAGE {
 
   override def variableHeader: VariableHeader = VariableHeader(List(packetId))
 
@@ -45,7 +47,7 @@ case class PUBACK(packetId: INT) extends Packet {
 }
 
 
-case class PUBREC(packetId: INT) extends Packet {
+case class PUBREC(packetId: INT) extends MESSAGE {
 
   override def variableHeader: VariableHeader = VariableHeader(List(packetId))
 
@@ -56,18 +58,18 @@ case class PUBREC(packetId: INT) extends Packet {
   override def usedByte: Int = encode.length
 }
 
-case class PUBREL(packetId: INT) extends Packet {
+case class PUBREL(packetId: INT) extends MESSAGE {
 
   override def variableHeader: VariableHeader = VariableHeader(List(packetId))
 
   override def payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
 
-  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x06) << 4, REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
+  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x06) << 4 | BYTE(0x02), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
   override def usedByte: Int = encode.length
 }
 
-case class PUBCOMB(packetId: INT) extends Packet {
+case class PUBCOMB(packetId: INT) extends MESSAGE {
 
   override def variableHeader: VariableHeader = VariableHeader(List(packetId))
 
@@ -141,8 +143,10 @@ object PUBRELDecoder {
   def decode(bytes: Array[Byte]): PUBREL = {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
-    if (typeAndFlag != (BYTE(0x06) << 4))
+    if (typeAndFlag != (BYTE(0x06) << 4 | BYTE(0x02))) {
+      println("unexpeceted type : " + typeAndFlag)
       throw new Error
+    }
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
     val packetId = Decoder.decodeINT(stream)
     if (remainingLength.value != packetId.usedByte)
@@ -156,9 +160,9 @@ object PUBCOMBDecoder {
   def decode(bytes: Array[Byte]): PUBCOMB = {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
+    val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
     if (typeAndFlag != (BYTE(0x07) << 4))
       throw new Error
-    val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
     val packetId = Decoder.decodeINT(stream)
     if (remainingLength.value != packetId.usedByte)
       throw new Error

@@ -16,7 +16,7 @@ case class DirectoryReq(actorName: String, actorType: ActorType)
 
 case class DirectoryResp(actorName: String, actor: ActorRef)
 
-class ActorType
+sealed trait ActorType
 
 case object TypeSession extends ActorType
 
