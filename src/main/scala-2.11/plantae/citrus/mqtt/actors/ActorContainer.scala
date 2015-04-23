@@ -11,5 +11,6 @@ object ActorContainer {
   val directory = system.actorOf(Props[Directory], "directory")
   val sessionCreator = system.actorOf(Props[SessionCreator], "session")
   val topicCreator = system.actorOf(Props[TopicCreator], "topic")
+  val directoryProxyMaster = system.actorOf(Props[DirectoryProxyMaster], "directoryProxy")
 }
 

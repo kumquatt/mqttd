@@ -1,5 +1,7 @@
 package plantae.citrus.mqtt.actors
 
+import java.util.concurrent.TimeUnit
+
 import akka.actor.{Actor, ActorRef, Props}
 import akka.event.Logging
 import akka.io.Tcp.{PeerClosed, Received, Write}
@@ -11,10 +13,18 @@ import plantae.citrus.mqtt.dto.publish._
 import plantae.citrus.mqtt.dto.subscribe.SUBSCRIBE
 import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBE
 
+import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.duration.Duration
+import akka.pattern.ask
+
+
 /**
  * Created by yinjae on 15. 4. 21..
  */
 class PacketBridge extends Actor {
+  implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
+  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
+
   private val logger = Logging(context.system, this)
   var session: ActorRef = null
   var socket: ActorRef = null
@@ -86,19 +96,39 @@ class PacketBridge extends Actor {
         val sessionChecker = self
         val doSessionActor = sender
 
-        ActorContainer.directory.tell(DirectoryReq(clientId, TypeSession), context.actorOf(Props(new Actor {
-          override def receive = {
-            case DirectoryResp(name, getOrCreateSession) => {
-              logger.info("load success DirectoryService")
-              if (cleanSession) {
-                getOrCreateSession ! SessionReset
+        val directoryProxyActor = ActorContainer.directoryProxyMaster
+        val future = Await.result(directoryProxyActor ? GetDirectoryActor, Duration.Inf)
+        future match {
+          case a : DirectoryActor =>
+            a.actor.tell(DirectoryReq(clientId, TypeSession), context.actorOf(Props(new Actor {
+              override def receive = {
+                case DirectoryResp(name, getOrCreateSession) => {
+                  logger.info("load success DirectoryService")
+                  if (cleanSession) {
+                    getOrCreateSession ! SessionReset
+                  }
+                  logger.info("clientSession[{}] is passed to [{}]", getOrCreateSession.path.name, doSessionActor.path.name)
+                  doSessionActor ! getOrCreateSession
+                  context.stop(sessionChecker)
+                }
               }
-              logger.info("clientSession[{}] is passed to [{}]", getOrCreateSession.path.name, doSessionActor.path.name)
-              doSessionActor ! getOrCreateSession
-              context.stop(sessionChecker)
-            }
-          }
-        })))
+            })))
+        }
+
+
+//        ActorContainer.directory.tell(DirectoryReq(clientId, TypeSession), context.actorOf(Props(new Actor {
+//          override def receive = {
+//            case DirectoryResp(name, getOrCreateSession) => {
+//              logger.info("load success DirectoryService")
+//              if (cleanSession) {
+//                getOrCreateSession ! SessionReset
+//              }
+//              logger.info("clientSession[{}] is passed to [{}]", getOrCreateSession.path.name, doSessionActor.path.name)
+//              doSessionActor ! getOrCreateSession
+//              context.stop(sessionChecker)
+//            }
+//          }
+//        })))
       }
     }
 
