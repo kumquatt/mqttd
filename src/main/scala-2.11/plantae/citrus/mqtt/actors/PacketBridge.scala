@@ -1,5 +1,9 @@
 package plantae.citrus.mqtt.actors
 
+import java.util.concurrent.TimeUnit
+
+import akka.actor.{Actor, ActorRef, Props}
+import akka.event.Logging
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.io.Tcp.{PeerClosed, Received, Write}
 import akka.util.ByteString
@@ -10,26 +14,28 @@ import plantae.citrus.mqtt.dto.publish._
 import plantae.citrus.mqtt.dto.subscribe.SUBSCRIBE
 import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBE
 
+import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.duration.Duration
+import akka.pattern.ask
+
+
 /**
  * Created by yinjae on 15. 4. 21..
  */
-class PacketBridge extends Actor with ActorLogging {
+class PacketBridge extends Actor {
+  private val logger = Logging(context.system, this)
   var session: ActorRef = null
   var socket: ActorRef = null
 
   def receive = {
 
     case MqttOutboundPacket(packet) => {
-      log.info("relay to TCP ")
       socket ! Write(ByteString(packet.encode))
     }
 
     case Received(data) => {
-      log.info("{}", new String(data.toArray))
-
       PacketDecoder.decode(data.toArray[Byte]) match {
         case connect: CONNECT => {
-          log.info("receive connect")
           socket = sender
           val bridgeActor = self
           val get = Get(connect.clientId.value, connect.cleanSession)
@@ -39,7 +45,6 @@ class PacketBridge extends Actor with ActorLogging {
                 case clientSession: ActorRef =>
                   session = clientSession
                   session.tell(MqttInboundPacket(connect), bridgeActor)
-                  log.info("receive session : {}", clientSession)
                   context.stop(self)
               }
             })))
@@ -70,7 +75,6 @@ class PacketBridge extends Actor with ActorLogging {
           case clientSession: ActorRef =>
             session = clientSession
             session.tell(MqttInboundPacket(connect), bridgeActor)
-            log.info("receive session : {}", clientSession)
             context.stop(self)
         }
       })))
@@ -78,30 +82,34 @@ class PacketBridge extends Actor with ActorLogging {
 
   case class Get(clientId: String, cleanSession: Boolean)
 
-  class SessionChecker extends Actor with ActorLogging {
+  class SessionChecker extends Actor {
+    private val logger = Logging(context.system, this)
 
     def receive = {
       case Get(clientId, cleanSession) => {
         val sessionChecker = self
         val doSessionActor = sender
 
-        ActorContainer.directory.tell(DirectoryReq(clientId, TypeSession), context.actorOf(Props(new Actor {
-          override def receive = {
-            case DirectoryResp(name, getOrCreateSession) => {
-              log.info("load success DirectoryService")
-              if (cleanSession) {
-                getOrCreateSession ! SessionReset
+        val directoryProxyActor = ActorContainer.directoryProxyMaster
+        val future = Await.result(directoryProxyActor ? GetDirectoryActor, Duration.Inf)
+        future match {
+          case a : DirectoryActor =>
+            a.actor.tell(DirectoryReq(clientId, TypeSession), context.actorOf(Props(new Actor {
+              override def receive = {
+                case DirectoryResp(name, getOrCreateSession) => {
+                  logger.info("load success DirectoryService")
+                  if (cleanSession) {
+                    getOrCreateSession ! SessionReset
+                  }
+                  logger.info("clientSession[{}] is passed to [{}]", getOrCreateSession.path.name, doSessionActor.path.name)
+                  doSessionActor ! getOrCreateSession
+                  context.stop(sessionChecker)
+                }
               }
-              log.info("clientSession[{}] is passed to [{}]", getOrCreateSession.path.name, doSessionActor.path.name)
-              doSessionActor ! getOrCreateSession
-              context.stop(sessionChecker)
-            }
-          }
-        })))
+            })))
+        }
       }
     }
-
   }
-
 }
 
