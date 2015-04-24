@@ -12,7 +12,7 @@ class Storage {
 
   case class message(payload: Array[Byte], qos: Short, retain: Boolean, topic: String)
 
-  private val pakcetIdGenerator = new AtomicLong()
+  private val packetIdGenerator = new AtomicLong()
   private var topics: List[String] = List()
   private var messages: List[message] = List()
   private var messageInProcessing: List[PUBLISH] = List()
@@ -20,7 +20,7 @@ class Storage {
   def persist(payload: Array[Byte], qos: Short, retain: Boolean, topic: String) =
     messages = messages ++ List(message(payload, qos, retain, topic))
 
-  def nextPacketId = pakcetIdGenerator.incrementAndGet().toShort
+  def nextPacketId = packetIdGenerator.incrementAndGet().toShort
 
   def nextMessage: Option[PUBLISH] = {
     messages match {
@@ -32,4 +32,10 @@ class Storage {
     }
   }
 
+  def clear = {
+    topics = List()
+    messages = List()
+    messageInProcessing = List()
+    packetIdGenerator.set(System.currentTimeMillis())
+  }
 }

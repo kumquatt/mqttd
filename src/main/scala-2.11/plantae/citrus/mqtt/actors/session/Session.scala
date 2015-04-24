@@ -76,6 +76,7 @@ class Session extends DirectoryMonitorActor with ActorLogging {
     case SessionReset => {
       log.debug("session reset : " + self.path.name)
       connectionStatus = None
+      storage.clear
       sender ! SessionResetAck
     }
 
