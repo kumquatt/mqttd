@@ -2,11 +2,10 @@ package plantae.citrus.mqtt.dto.connect
 
 import plantae.citrus.mqtt.dto._
 
-/**
- * Created by yinjae on 15. 4. 17..
- */
+sealed trait CONNECTION extends Packet
+
 case class CONNECT(clientId: STRING, cleanSession: Boolean, will: Option[Will], authentication: Option[Authentication],
-                   keepAlive: INT) extends Packet {
+                   keepAlive: INT) extends CONNECTION {
 
 
   override def variableHeader: VariableHeader = {
@@ -60,6 +59,7 @@ case class CONNECT(clientId: STRING, cleanSession: Boolean, will: Option[Will], 
 
     Payload(List(clientId) ++ willPayload ++ authenticationPayload)
   }
+
   override def fixedHeader: FixedHeader = FixedHeader(ControlPacketType.CONNECT,
     REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
@@ -141,7 +141,7 @@ object CONNECTDecoder {
   }
 }
 
-case class CONNACK(sessionPresent: Boolean, returnCode: BYTE) extends Packet {
+case class CONNACK(sessionPresent: Boolean, returnCode: BYTE) extends CONNECTION {
 
   override def variableHeader: VariableHeader = VariableHeader(List({
     if (sessionPresent) BYTE(0x01) else BYTE(0x00)
@@ -177,8 +177,11 @@ object CONNACKDecoder {
 
 case object DISCONNECT extends Packet {
   override def fixedHeader: FixedHeader = FixedHeader(ControlPacketType.DISCONNECT, REMAININGLENGTH(0))
+
   override def variableHeader: VariableHeader = EMPTY_COMPONENT.EMPTY_VARIABLE_HEADER
+
   override def payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
+
   override def usedByte: Int = encode.length
 }
 

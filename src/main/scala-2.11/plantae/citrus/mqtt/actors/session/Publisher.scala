@@ -4,8 +4,8 @@ import akka.actor._
 import plantae.citrus.mqtt.actors.ActorContainer
 import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectoryResp, TypeTopic}
 import plantae.citrus.mqtt.actors.topic.{TopicInMessage, TopicInMessageAck}
+import plantae.citrus.mqtt.dto.INT
 import plantae.citrus.mqtt.dto.publish._
-import plantae.citrus.mqtt.dto.{INT, PUBLISHPAYLOAD, STRING}
 
 
 case object uninitialized
@@ -15,6 +15,8 @@ sealed trait state
 sealed trait inbound extends state
 
 sealed trait outbound extends state
+
+case object OutboundPublishComplete extends outbound
 
 case object waitPublish extends inbound with outbound
 
@@ -39,7 +41,7 @@ object PublishConstant {
   val outboundPrefix = "publish:outbound-"
 }
 
-class OutboundPublisher(client: ActorRef, packetId: Option[Short]) extends FSM[outbound, Any] with ActorLogging {
+class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[outbound, Any] with ActorLogging {
   val publishActor = self
 
   override def preStart {
@@ -55,18 +57,12 @@ class OutboundPublisher(client: ActorRef, packetId: Option[Short]) extends FSM[o
   startWith(waitPublish, uninitialized)
 
   when(waitPublish) {
-    case Event((payload: Array[Byte], qos: Short, retain: Boolean, topic: String), waitPublish) =>
-      client ! MqttOutboundPacket(PUBLISH(false, INT(qos), retain, STRING(topic), {
-        qos match {
-          case 0 => None
-          case x if (x > 0) => packetId match {
-            case Some(y) => Some(INT(y))
-            case None => None
-          }
-        }
-      }, PUBLISHPAYLOAD(payload)))
-      qos match {
-        case 0 => stop(FSM.Shutdown)
+    case Event(publish: PUBLISH, waitPublish) =>
+      client ! MqttOutboundPacket(publish)
+      publish.qos.value match {
+        case 0 =>
+          session ! OutboundPublishComplete
+          stop(FSM.Shutdown)
         case 1 => goto(waitPubAck)
         case 2 => goto(waitPubRec)
       }
@@ -75,7 +71,9 @@ class OutboundPublisher(client: ActorRef, packetId: Option[Short]) extends FSM[o
   }
 
   when(waitPubAck) {
-    case Event(PUBACK(packetId), waitPublish) => stop(FSM.Shutdown)
+    case Event(PUBACK(packetId), waitPublish) =>
+      session ! OutboundPublishComplete
+      stop(FSM.Shutdown)
   }
 
   when(waitPubRec) {
@@ -86,6 +84,7 @@ class OutboundPublisher(client: ActorRef, packetId: Option[Short]) extends FSM[o
 
   when(waitPubComb) {
     case Event(PUBCOMB(packetId), waitPubRec) =>
+      session ! OutboundPublishComplete
       stop(FSM.Shutdown)
   }
 
@@ -153,6 +152,8 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[inbound, Any] w
         case Some(x) =>
           client ! MqttOutboundPacket(PUBACK(INT(x)))
           stop(FSM.Shutdown)
+        case None => stop(FSM.Shutdown)
+
       }
   }
 

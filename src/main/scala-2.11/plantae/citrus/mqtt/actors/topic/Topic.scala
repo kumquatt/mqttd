@@ -11,11 +11,11 @@ case class Unsubscribe(clientId: String)
 
 case object ClearList
 
-case class TopicInMessage(payload: Array[Byte], qos: Int, retain: Boolean, packetId: Option[Int])
+case class TopicInMessage(payload: Array[Byte], qos: Short, retain: Boolean, packetId: Option[Int])
 
 case object TopicInMessageAck
 
-case class TopicOutMessage(payload: Array[Byte], qos: Int, retain: Boolean, topic: String)
+case class TopicOutMessage(payload: Array[Byte], qos: Short, retain: Boolean, topic: String)
 
 case object TopicOutMessageAck
 
@@ -35,7 +35,7 @@ class Topic extends DirectoryMonitorActor with ActorLogging {
 
   def receive = {
     case Subscribe(clientId) => {
-      log.debug("Subscribe client({}) topic({})", clientId, self.path.name)
+      log.info("Subscribe client({}) topic({})", clientId, self.path.name)
       subscriberMap.+=((clientId, sender))
       printEverySubscriber
     }
