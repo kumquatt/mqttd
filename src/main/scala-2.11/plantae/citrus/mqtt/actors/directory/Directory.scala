@@ -1,7 +1,6 @@
 package plantae.citrus.mqtt.actors.directory
 
 import akka.actor._
-import akka.event.Logging
 import plantae.citrus.mqtt.actors._
 
 sealed trait DirectoryOperation
@@ -30,13 +29,13 @@ trait DirectoryMonitorActor extends Actor with ActorLogging {
   }
 
   override def postStop = {
-    ActorContainer.directoryOperation(Remove(self.path.name, actorType), context, self)
+    //    ActorContainer.directoryOperation(Remove(self.path.name, actorType), context, self)
   }
 
   def actorType: ActorType
 }
 
-class Directory extends Actor with ActorLogging{
+class Directory extends Actor with ActorLogging {
   var sessionActorMap: Map[String, ActorRef] = Map()
   var topicActorMap: Map[String, ActorRef] = Map()
 
@@ -93,7 +92,7 @@ class Directory extends Actor with ActorLogging{
 
     }
     case Terminated(x) => {
-      log.info("Terminated actor({})",x.path)
+      log.info("Terminated actor({})", x.path)
       x.path.parent.name match {
         case "session" =>
           sessionActorMap.foreach(each => if (each._2 == x) {

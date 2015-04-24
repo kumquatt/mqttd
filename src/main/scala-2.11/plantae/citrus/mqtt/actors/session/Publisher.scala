@@ -8,40 +8,40 @@ import plantae.citrus.mqtt.dto.INT
 import plantae.citrus.mqtt.dto.publish._
 
 
-case object uninitialized
+case object Uninitialized
 
-sealed trait state
+sealed trait State
 
-sealed trait inbound extends state
+sealed trait Inbound extends State
 
-sealed trait outbound extends state
+sealed trait Outbound extends State
 
-case object OutboundPublishComplete extends outbound
+case object OutboundPublishComplete extends Outbound
 
-case object waitPublish extends inbound with outbound
+case object WaitPublish extends Inbound with Outbound
 
-case object resume extends inbound with outbound
+case object Resume extends Inbound with Outbound
 
-case object waitTopicResponseQos0 extends inbound
+case object WaitTopicResponseQos0 extends Inbound
 
-case object waitTopicResponseQos1 extends inbound
+case object WaitTopicResponseQos1 extends Inbound
 
-case object waitTopicResponseQos2 extends inbound
+case object WaitTopicResponseQos2 extends Inbound
 
-case object waitPubRel extends inbound
+case object WaitPubRel extends Inbound
 
-case object waitPubAck extends outbound
+case object WaitPubAck extends Outbound
 
-case object waitPubRec extends outbound
+case object WaitPubRec extends Outbound
 
-case object waitPubComb extends outbound
+case object WaitPubComb extends Outbound
 
 object PublishConstant {
   val inboundPrefix = "publish:inbound-"
   val outboundPrefix = "publish:outbound-"
 }
 
-class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[outbound, Any] with ActorLogging {
+class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outbound, Any] with ActorLogging {
   val publishActor = self
 
   override def preStart {
@@ -54,44 +54,41 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[outboun
     super.postStop
   }
 
-  startWith(waitPublish, uninitialized)
+  startWith(WaitPublish, Uninitialized)
 
-  when(waitPublish) {
+  when(WaitPublish) {
     case Event(publish: PUBLISH, waitPublish) =>
-      client ! MqttOutboundPacket(publish)
+      client ! MQTTOutboundPacket(publish)
       publish.qos.value match {
         case 0 =>
           session ! OutboundPublishComplete
           stop(FSM.Shutdown)
-        case 1 => goto(waitPubAck)
-        case 2 => goto(waitPubRec)
+        case 1 => goto(WaitPubAck)
+        case 2 => goto(WaitPubRec)
       }
-
-
   }
 
-  when(waitPubAck) {
+  when(WaitPubAck) {
     case Event(PUBACK(packetId), waitPublish) =>
       session ! OutboundPublishComplete
       stop(FSM.Shutdown)
   }
 
-  when(waitPubRec) {
+  when(WaitPubRec) {
     case Event(PUBREC(packetId), waitPublish) =>
-      client ! MqttOutboundPacket(PUBREL(packetId))
-      goto(waitPubComb)
+      client ! MQTTOutboundPacket(PUBREL(packetId))
+      goto(WaitPubComb)
   }
 
-  when(waitPubComb) {
+  when(WaitPubComb) {
     case Event(PUBCOMB(packetId), waitPubRec) =>
       session ! OutboundPublishComplete
       stop(FSM.Shutdown)
   }
-
 }
 
 
-class InboundPublisher(client: ActorRef, qos: Short) extends FSM[inbound, Any] with ActorLogging {
+class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] with ActorLogging {
   val publishActor = self
 
   val packetId: Option[Short] = qos match {
@@ -114,9 +111,9 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[inbound, Any] w
   }
 
 
-  startWith(waitPublish, uninitialized)
+  startWith(WaitPublish, Uninitialized)
 
-  when(waitPublish) {
+  when(WaitPublish) {
     case Event(publish: PUBLISH, waitPublish) =>
       ActorContainer.invokeCallback(DirectoryReq(publish.topic.value, TypeTopic), context, {
         case DirectoryResp(name, actor) =>
@@ -128,49 +125,47 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[inbound, Any] w
               }
             ), publishActor)
       }
-
-
       )
 
       publish.qos.value match {
-        case 0 => goto(waitTopicResponseQos0)
-        case 1 => goto(waitTopicResponseQos1)
-        case 2 => goto(waitTopicResponseQos2)
+        case 0 => goto(WaitTopicResponseQos0)
+        case 1 => goto(WaitTopicResponseQos1)
+        case 2 => goto(WaitTopicResponseQos2)
         case other => stop(FSM.Shutdown)
       }
   }
 
-  when(waitTopicResponseQos0) {
+  when(WaitTopicResponseQos0) {
     case Event(TopicInMessageAck, waitPublish) =>
       stop(FSM.Shutdown)
   }
 
 
-  when(waitTopicResponseQos1) {
+  when(WaitTopicResponseQos1) {
     case Event(TopicInMessageAck, waitPublish) =>
       packetId match {
         case Some(x) =>
-          client ! MqttOutboundPacket(PUBACK(INT(x)))
+          client ! MQTTOutboundPacket(PUBACK(INT(x)))
           stop(FSM.Shutdown)
         case None => stop(FSM.Shutdown)
 
       }
   }
 
-  when(waitTopicResponseQos2) {
+  when(WaitTopicResponseQos2) {
     case Event(TopicInMessageAck, waitPublish) =>
       packetId match {
         case Some(x) =>
-          client ! MqttOutboundPacket(PUBREC(INT(x)))
-          goto(waitPubRel)
+          client ! MQTTOutboundPacket(PUBREC(INT(x)))
+          goto(WaitPubRel)
         case None => stop(FSM.Shutdown)
       }
 
   }
 
-  when(waitPubRel) {
+  when(WaitPubRel) {
     case Event(PUBREL(packetId), waitPublish) =>
-      client ! MqttOutboundPacket(PUBCOMB((packetId)))
+      client ! MQTTOutboundPacket(PUBCOMB((packetId)))
       stop(FSM.Shutdown)
   }
 

@@ -27,6 +27,25 @@ object ActorContainer {
     })))
   }
 
+  def invokeCallback(directoryReq: DirectoryReq,  callback: PartialFunction[Any, Unit]): Unit = {
+
+    directoryProxyMaster.tell(GetDirectoryActor, system.actorOf(Props(new Actor {
+      override def receive = {
+        case DirectoryActor(actor) =>
+          val callbackInvoker = context.actorOf(Props(new Actor {
+            override def postStop = {
+            }
+
+            override def receive = callback
+          }))
+          context.watch(callbackInvoker)
+          actor.tell(directoryReq, callbackInvoker)
+        case Terminated(x) =>
+          println(x + " really is dead")
+      }
+    })))
+  }
+
   def invokeCallback(directoryReq: DirectoryReq, senderContext: ActorContext, callback: PartialFunction[Any, Unit]): Unit = {
 
     directoryProxyMaster.tell(GetDirectoryActor, senderContext.actorOf(Props(new Actor {

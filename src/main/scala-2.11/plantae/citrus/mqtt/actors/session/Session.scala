@@ -2,43 +2,43 @@ package plantae.citrus.mqtt.actors.session
 
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor._
-import akka.event.Logging
 import akka.pattern.ask
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.directory._
-import plantae.citrus.mqtt.actors.topic.{Subscribe, TopicOutMessage}
+import plantae.citrus.mqtt.actors.topic.{Subscribe, TopicOutMessage, TopicResponse}
 import plantae.citrus.mqtt.dto._
-import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, DISCONNECT, ReturnCode, Will}
+import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, DISCONNECT, ReturnCode}
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
 import plantae.citrus.mqtt.dto.publish._
 import plantae.citrus.mqtt.dto.subscribe.{SUBACK, SUBSCRIBE, TopicFilter}
 import plantae.citrus.mqtt.dto.unsubscribe.{UNSUBACK, UNSUBSCRIBE}
 
-import scala.concurrent.duration.{Duration, FiniteDuration}
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
 
-case class MqttInboundPacket(mqttPacket: Packet)
+case class MQTTInboundPacket(mqttPacket: Packet)
 
-case class MqttOutboundPacket(mqttPacket: Packet)
+case class MQTTOutboundPacket(mqttPacket: Packet)
 
-sealed trait SessionCommand
+sealed trait SessionRequest
 
-case object SessionReset extends SessionCommand
+sealed trait SessionResponse
 
-case object SessionResetAck extends SessionCommand
+case object SessionReset extends SessionRequest
 
-case object SessionKeepAliveTimeOut extends SessionCommand
+case object SessionResetAck extends SessionResponse
 
-case object ClientCloseConnection extends SessionCommand
+case object SessionKeepAliveTimeOut extends SessionRequest
+
+case object ClientCloseConnection extends SessionRequest
 
 class SessionCreator extends Actor with ActorLogging {
   override def receive = {
     case clientId: String => {
-      log.info("new session is created [{}]", clientId)
+      log.debug("new session is created [{}]", clientId)
       sender ! context.actorOf(Props[Session], clientId)
     }
   }
@@ -46,9 +46,6 @@ class SessionCreator extends Actor with ActorLogging {
 
 class Session extends DirectoryMonitorActor with ActorLogging {
   implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
-  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
-
-  case class ConnectionStatus(will: Option[Will], keepAliveTime: Int)
 
   var connectionStatus: Option[ConnectionStatus] = None
   val storage = new Storage()
@@ -56,59 +53,63 @@ class Session extends DirectoryMonitorActor with ActorLogging {
   override def actorType: ActorType = TypeSession
 
   override def receive: Receive = {
-    case MqttInboundPacket(packet) => mqttPacket(packet, sender)
-    case command: SessionCommand => session(command)
-    case topicMessage: TopicOutMessage => topicPacket(topicMessage, sender)
-    case RegisterAck(name) => {
-      log.info("receive register ack")
+    case MQTTInboundPacket(packet) => handleMQTTPacket(packet, sender)
+    case sessionRequest: SessionRequest => handleSession(sessionRequest)
+    case topicResponse: TopicResponse => handleTopicPacket(topicResponse, sender)
+    case OutboundPublishComplete => invokePublish
+    case RegisterAck(name) =>
+    case everythingElse => log.error("unexpected message : {}", everythingElse)
+  }
+
+  def handleTopicPacket(response: TopicResponse, sender: ActorRef) {
+    response match {
+      case message: TopicOutMessage =>
+        storage.persist(message.payload, message.qos, message.retain, message.topic)
+        invokePublish
+      case anyOtherTopicMessage => log.error(" unexpected topic message {}", anyOtherTopicMessage)
     }
-    case everythingElse => println(everythingElse)
-  }
-
-  def topicPacket(message: TopicOutMessage, sender: ActorRef) {
-    storage.persist(message.payload, message.qos, message.retain, message.topic)
-    invokePublish
   }
 
 
-  def session(command: SessionCommand): Unit = command match {
+  def handleSession(command: SessionRequest): Unit = command match {
 
     case SessionReset => {
-      log.info("session reset : " + self.path.name)
+      log.debug("session reset : " + self.path.name)
       connectionStatus = None
       sender ! SessionResetAck
     }
 
     case SessionKeepAliveTimeOut => {
-      log.info("No keep alive request!!!!")
+      log.debug("No keep alive request!!!!")
     }
 
     case ClientCloseConnection => {
-      //TODO : will process handling
-      log.info("ClientCloseConnection : " + self.path.name)
-      connectionStatus = connectionStatus match {
+      log.debug("ClientCloseConnection : " + self.path.name)
+      val currentConnectionStatus = connectionStatus
+      connectionStatus = None
+      currentConnectionStatus match {
         case Some(x) =>
-          x.cancelTimer
-          None
-        case None => None
+          x.handleWill
+          x.destory
+        case None =>
       }
     }
 
   }
 
-  def mqttPacket(packet: Packet, bridge: ActorRef): Unit = {
+  def handleMQTTPacket(packet: Packet, bridge: ActorRef): Unit = {
     connectionStatus match {
-      case Some(x) => x.cancelTimer
+      case Some(x) => x.resetTimer
       case None =>
     }
 
     packet match {
       case mqtt: CONNECT =>
-        connectionStatus = Some(ConnectionStatus(mqtt.will, mqtt.keepAlive.value, sender))
-        bridge ! MqttOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
+        connectionStatus = Some(ConnectionStatus(mqtt.will, mqtt.keepAlive.value, self, sender))
+        bridge ! MQTTOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
         invokePublish
       case PINGREQ =>
-        bridge ! MqttOutboundPacket(PINGRESP)
+        bridge ! MQTTOutboundPacket(PINGRESP)
       case mqtt: PUBLISH => {
         context.actorOf(Props(classOf[InboundPublisher], sender, mqtt.qos.value), {
           mqtt.qos.value match {
@@ -132,7 +133,6 @@ class Session extends DirectoryMonitorActor with ActorLogging {
       case mqtt: PUBACK =>
         context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
           case Some(x) => x ! mqtt
-            println(x)
           case None => log.error("can't find publish outbound actor {}", PublishConstant.outboundPrefix + mqtt.packetId.value)
 
         }
@@ -143,22 +143,23 @@ class Session extends DirectoryMonitorActor with ActorLogging {
         }
 
       case DISCONNECT => {
-        connectionStatus = connectionStatus match {
+        val currentConnectionStatus = connectionStatus
+        connectionStatus = None
+        currentConnectionStatus match {
           case Some(x) =>
-            x.cancelTimer
-            None
-          case None => None
+            x.destory
+          case None =>
         }
 
       }
 
       case subscribe: SUBSCRIBE =>
         val subscribeResult = subscribeTopics(subscribe.topicFilter)
-        sender ! MqttOutboundPacket(SUBACK(subscribe.packetId, subscribeResult))
+        sender ! MQTTOutboundPacket(SUBACK(subscribe.packetId, subscribeResult))
 
       case unsubscribe: UNSUBSCRIBE =>
         unsubscribeTopics(unsubscribe.topicFilter)
-        sender ! MqttOutboundPacket(UNSUBACK(unsubscribe.packetId))
+        sender ! MQTTOutboundPacket(UNSUBACK(unsubscribe.packetId))
     }
 
   }
@@ -187,53 +188,6 @@ class Session extends DirectoryMonitorActor with ActorLogging {
 
   }
 
-  def doConnect(connect: CONNECT): CONNACK = {
-    CONNACK(true, ReturnCode.connectionAccepted)
-  }
-
-  case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, socket: ActorRef) {
-    private var keepAliveTimer: Cancellable = ActorContainer.system.scheduler.scheduleOnce(
-      FiniteDuration(keepAliveTime, TimeUnit.SECONDS), self, SessionKeepAliveTimeOut)
-
-    private var publishActor: Option[ActorRef] = None
-
-    def cancelTimer = {
-      keepAliveTimer.cancel()
-    }
-
-    def resetTimer = {
-      cancelTimer
-      keepAliveTimer = ActorContainer.system.scheduler.scheduleOnce(
-        FiniteDuration(keepAliveTime, TimeUnit.SECONDS), self, SessionKeepAliveTimeOut)
-    }
-  }
-
-  class Storage {
-
-    case class message(payload: Array[Byte], qos: Short, retain: Boolean, topic: String)
-
-    private val pakcetIdGenerator = new AtomicLong()
-    private var topics: List[String] = List()
-    private var messages: List[message] = List()
-    private var messageInProcessing: List[PUBLISH] = List()
-
-    def persist(payload: Array[Byte], qos: Short, retain: Boolean, topic: String) =
-      messages = messages ++ List(message(payload, qos, retain, topic))
-
-    def nextPacketId = pakcetIdGenerator.incrementAndGet().toShort
-
-    def nextMessage: Option[PUBLISH] = {
-      messages match {
-        case head :: tail => messages = tail
-          val publish = PUBLISH(false, INT(head.qos), head.retain, STRING(head.topic), Some(INT(nextPacketId)), PUBLISHPAYLOAD(head.payload))
-          messageInProcessing = messageInProcessing ++ List(publish)
-          Some(publish)
-        case List() => None
-      }
-    }
-
-  }
-
   def invokePublish = {
     val session = self
     connectionStatus match {
@@ -247,12 +201,11 @@ class Session extends DirectoryMonitorActor with ActorLogging {
             })
             context.child(actorName) match {
               case Some(actor) => actor ! x
-              case None => context.actorOf(Props(classOf[OutboundPublisher], connectionStatus.get.socket, session), actorName) ! x
+              case None => context.actorOf(Props(classOf[OutboundPublisher], tcp.socket, session), actorName) ! x
             }
-          case None => log.info(" no message")
+          case None => log.debug("no message")
         }
-      case None =>
-        log.info("no  connection")
+      case None => log.debug("no connection")
     }
   }
 

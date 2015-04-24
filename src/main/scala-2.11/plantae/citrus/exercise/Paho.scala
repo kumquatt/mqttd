@@ -20,6 +20,7 @@ object Paho extends App {
         }
       )
       option.setKeepAliveInterval(10)
+      option.setWill("test","test will message".getBytes,2, true)
       client1.connect(option)
       println("client1 1 => connection complete")
 
@@ -37,6 +38,7 @@ object Paho extends App {
         }
       )
       option.setKeepAliveInterval(10)
+
       client2.connect(option)
 
       client1.subscribe("test")
