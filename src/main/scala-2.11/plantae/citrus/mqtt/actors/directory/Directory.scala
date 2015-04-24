@@ -93,7 +93,7 @@ class Directory extends Actor with ActorLogging{
 
     }
     case Terminated(x) => {
-      println(x.path)
+      log.info("Terminated actor({})",x.path)
       x.path.parent.name match {
         case "session" =>
           sessionActorMap.foreach(each => if (each._2 == x) {
