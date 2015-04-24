@@ -35,12 +35,12 @@ case object SessionKeepAliveTimeOut extends SessionCommand
 
 case object ClientCloseConnection extends SessionCommand
 
-class SessionCreator extends Actor {
-  private val logger = Logging(context.system, this)
+class SessionCreator extends Actor with ActorLogging {
+//  private val logger = Logging(context.system, this)
 
   override def receive = {
     case clientId: String => {
-      logger.info("new session is created [{}]", clientId)
+      log.info("new session is created [{}]", clientId)
       sender ! context.actorOf(Props[Session], clientId)
     }
   }
