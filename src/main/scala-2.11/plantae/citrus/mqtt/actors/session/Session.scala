@@ -35,29 +35,30 @@ case object SessionKeepAliveTimeOut extends SessionRequest
 
 case object ClientCloseConnection extends SessionRequest
 
-class SessionCreator extends Actor with ActorLogging {
+class SessionRoot extends Actor with ActorLogging {
   override def receive = {
     case clientId: String => {
-      log.debug("new session is created [{}]", clientId)
-      sender ! context.actorOf(Props[Session], clientId)
+      context.child(clientId) match {
+        case Some(x) => sender ! x
+        case None => log.debug("new session is created [{}]", clientId)
+          sender ! context.actorOf(Props[Session], clientId)
+      }
     }
   }
 }
 
-class Session extends DirectoryMonitorActor with ActorLogging {
+class Session extends Actor with ActorLogging {
   implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
 
   var connectionStatus: Option[ConnectionStatus] = None
   val storage = new Storage()
 
-  override def actorType: ActorType = TypeSession
 
   override def receive: Receive = {
     case MQTTInboundPacket(packet) => handleMQTTPacket(packet, sender)
     case sessionRequest: SessionRequest => handleSession(sessionRequest)
     case topicResponse: TopicResponse => handleTopicPacket(topicResponse, sender)
     case OutboundPublishComplete => invokePublish
-    case RegisterAck(name) =>
     case everythingElse => log.error("unexpected message : {}", everythingElse)
   }
 
@@ -106,7 +107,7 @@ class Session extends DirectoryMonitorActor with ActorLogging {
 
     packet match {
       case mqtt: CONNECT =>
-        connectionStatus = Some(ConnectionStatus(mqtt.will, mqtt.keepAlive.value, self, sender))
+        connectionStatus = Some(ConnectionStatus(mqtt.will, mqtt.keepAlive.value, self, context, sender))
         bridge ! MQTTOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
         invokePublish
       case PINGREQ =>
@@ -169,7 +170,7 @@ class Session extends DirectoryMonitorActor with ActorLogging {
     val clientId = self.path.name
 
     val result = topicFilters.map(tp =>
-      Await.result(ActorContainer.directory ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
+      Await.result(ActorContainer.directoryProxy ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
         case DirectoryResp(topicName, option) =>
           option ! Subscribe(self.path.name)
           BYTE(0x00)
@@ -197,7 +198,7 @@ class Session extends DirectoryMonitorActor with ActorLogging {
           case Some(x) =>
 
             val actorName = PublishConstant.outboundPrefix + (x.packetId match {
-              case Some(y) => y.value
+              case Some(y) => println(y.value);y.value
               case None => UUID.randomUUID().toString
             })
             context.child(actorName) match {

@@ -2,7 +2,7 @@ package plantae.citrus.mqtt.actors.session
 
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ActorRef, Cancellable}
+import akka.actor.{ActorContext, ActorRef, Cancellable}
 import plantae.citrus.mqtt.actors.ActorContainer
 import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectoryResp, TypeTopic}
 import plantae.citrus.mqtt.actors.topic.TopicInMessage
@@ -15,7 +15,7 @@ import scala.concurrent.duration.FiniteDuration
 /**
  * Created by yinjae on 15. 4. 24..
  */
-case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: ActorRef, socket: ActorRef) {
+case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: ActorRef, sessionContext: ActorContext, socket: ActorRef) {
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
   private var keepAliveTimer: Cancellable = ActorContainer.system.scheduler.scheduleOnce(
@@ -36,7 +36,7 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
   def handleWill = {
     will match {
       case Some(x) =>
-        ActorContainer.invokeCallback(DirectoryReq(x.topic.value, TypeTopic), {
+        ActorContainer.invokeCallback(DirectoryReq(x.topic.value, TypeTopic), sessionContext, {
           case DirectoryResp(name, actor) =>
             val topicInMessage = TopicInMessage(x.message.value.getBytes, (x.qos >> 3 & BYTE(0x03.toByte)).value.toShort, x.retain, x.qos.value.toShort match {
               case 0 => None

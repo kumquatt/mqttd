@@ -1,7 +1,6 @@
 package plantae.citrus.mqtt.actors.topic
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
-import plantae.citrus.mqtt.actors.directory.{ActorType, DirectoryMonitorActor, TypeTopic}
 
 import scala.collection.mutable.Map
 
@@ -23,17 +22,20 @@ case class TopicOutMessage(payload: Array[Byte], qos: Short, retain: Boolean, to
 
 case object TopicOutMessageAck extends TopicRequest
 
-class TopicCreator extends Actor with ActorLogging {
+class TopicRoot extends Actor with ActorLogging {
 
   override def receive = {
     case topicName: String => {
-      log.debug("new topic is created [{}]", topicName)
-      sender ! context.actorOf(Props[Topic], topicName)
+      context.child(topicName) match {
+        case Some(x) => sender ! x
+        case None => log.debug("new topic is created [{}]", topicName)
+          sender ! context.actorOf(Props[Topic], topicName)
+      }
     }
   }
 }
 
-class Topic extends DirectoryMonitorActor with ActorLogging {
+class Topic extends Actor with ActorLogging {
 
   val subscriberMap: Map[String, ActorRef] = Map()
 
@@ -70,6 +72,4 @@ class Topic extends DirectoryMonitorActor with ActorLogging {
     log.info("{}'s subscriber ", self.path.name)
     subscriberMap.foreach(s => log.info("{},", s._1))
   }
-
-  override def actorType: ActorType = TypeTopic
 }

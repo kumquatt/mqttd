@@ -18,4 +18,5 @@
 
 10. akka test
 
+11. performance test
 

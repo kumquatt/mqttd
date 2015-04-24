@@ -8,7 +8,7 @@ import akka.pattern.ask
 import akka.util.ByteString
 import plantae.citrus.mqtt.actors.ActorContainer
 import plantae.citrus.mqtt.actors.directory._
-import plantae.citrus.mqtt.actors.session.{ClientCloseConnection, MQTTInboundPacket, MQTTOutboundPacket, SessionReset}
+import plantae.citrus.mqtt.actors.session._
 import plantae.citrus.mqtt.dto.PacketDecoder
 import plantae.citrus.mqtt.dto.connect._
 import plantae.citrus.mqtt.dto.ping._
@@ -100,24 +100,19 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
         val sessionChecker = self
         val doSessionActor = sender
 
-        val directoryProxyActor = ActorContainer.directoryProxyMaster
-        val future = Await.result(directoryProxyActor ? GetDirectoryActor, Duration.Inf)
-        future match {
-          case a: DirectoryActor =>
-            a.actor.tell(DirectoryReq(clientId, TypeSession), context.actorOf(Props(new Actor {
-              override def receive = {
-                case DirectoryResp(name, getOrCreateSession) => {
-                  log.info("load success DirectoryService")
-                  if (cleanSession) {
-                    getOrCreateSession ! SessionReset
-                  }
-                  log.info("clientSession[{}] is passed to [{}]", getOrCreateSession.path.name, doSessionActor.path.name)
-                  doSessionActor ! getOrCreateSession
-                  context.stop(sessionChecker)
-                }
-              }
-            })))
-        }
+        ActorContainer.invokeCallback(DirectoryReq(clientId, TypeSession),
+        context, {
+          case DirectoryResp(name, session) => {
+            log.info("load success DirectoryService")
+            if (cleanSession) {
+              Await.result(session ? SessionReset, Duration.Inf)
+            }
+            log.info("clientSession[{}] is passed to [{}]", session.path.name, doSessionActor.path.name)
+            doSessionActor ! session
+            context.stop(sessionChecker)
+          }
+        })
+
       }
     }
   }

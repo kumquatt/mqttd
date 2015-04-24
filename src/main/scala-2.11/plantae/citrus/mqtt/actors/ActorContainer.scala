@@ -3,65 +3,27 @@ package plantae.citrus.mqtt.actors
 import akka.actor._
 import com.typesafe.config.ConfigFactory
 import plantae.citrus.mqtt.actors.directory._
-import plantae.citrus.mqtt.actors.session.SessionCreator
-import plantae.citrus.mqtt.actors.topic.TopicCreator
+import plantae.citrus.mqtt.actors.session.SessionRoot
+import plantae.citrus.mqtt.actors.topic.TopicRoot
 
 /**
  * Created by yinjae on 15. 4. 21..
  */
 object ActorContainer {
   val system = ActorSystem("mqtt", ConfigFactory.load.getConfig("mqtt"))
-  val directory = system.actorOf(Props[Directory], "directory")
-  val sessionCreator = system.actorOf(Props[SessionCreator], "session")
-  val topicCreator = system.actorOf(Props[TopicCreator], "topic")
-  val directoryProxyMaster = system.actorOf(Props[DirectoryProxyMaster], "directoryProxy")
+  val sessionRoot = system.actorOf(Props[SessionRoot], "session")
+  val topicRoot = system.actorOf(Props[TopicRoot], "topic")
+  val directoryProxy = system.actorOf(Props[DirectoryProxy], "directory")
 
   def directoryOperation(x: DirectoryOperation, senderContext: ActorContext, originalSender: ActorRef) = {
-
-    directoryProxyMaster.tell(GetDirectoryActor, senderContext.actorOf(Props(new Actor {
-      override def receive = {
-        case DirectoryActor(actor) => actor.tell(x, originalSender)
-          context.stop(self)
-
-      }
-    })))
+    implicit val context: ActorContext = senderContext
+    directoryProxy.forward(x)
   }
 
-  def invokeCallback(directoryReq: DirectoryReq,  callback: PartialFunction[Any, Unit]): Unit = {
 
-    directoryProxyMaster.tell(GetDirectoryActor, system.actorOf(Props(new Actor {
-      override def receive = {
-        case DirectoryActor(actor) =>
-          val callbackInvoker = context.actorOf(Props(new Actor {
-            override def postStop = {
-            }
-
-            override def receive = callback
-          }))
-          context.watch(callbackInvoker)
-          actor.tell(directoryReq, callbackInvoker)
-        case Terminated(x) =>
-          println(x + " really is dead")
-      }
-    })))
-  }
-
-  def invokeCallback(directoryReq: DirectoryReq, senderContext: ActorContext, callback: PartialFunction[Any, Unit]): Unit = {
-
-    directoryProxyMaster.tell(GetDirectoryActor, senderContext.actorOf(Props(new Actor {
-      override def receive = {
-        case DirectoryActor(actor) =>
-          val callbackInvoker = context.actorOf(Props(new Actor {
-            override def postStop = {
-            }
-
-            override def receive = callback
-          }))
-          context.watch(callbackInvoker)
-          actor.tell(directoryReq, callbackInvoker)
-        case Terminated(x) =>
-          println(x + " really is dead")
-      }
+  def invokeCallback(directoryReq: DirectoryReq, senderContext: ActorContext, callback: PartialFunction[Any, Unit]) = {
+    directoryProxy.tell(directoryReq, senderContext.actorOf(Props(new Actor {
+      override def receive = callback
     })))
   }
 }

@@ -1,21 +1,20 @@
 package plantae.citrus.mqtt.actors.directory
 
+import java.util.concurrent.TimeUnit
+
 import akka.actor._
+import akka.pattern.ask
+import akka.routing.{ActorRefRoutee, RoundRobinRoutingLogic, Router}
 import plantae.citrus.mqtt.actors._
+
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext}
 
 sealed trait DirectoryOperation
 
-case class Register(actorName: String, actorType: ActorType) extends DirectoryOperation
+case class DirectoryReq(name: String, actorType: ActorType) extends DirectoryOperation
 
-case class RegisterAck(actorName: String) extends DirectoryOperation
-
-case class Remove(actorName: String, actorType: ActorType) extends DirectoryOperation
-
-case class RemoveAck(actorName: String) extends DirectoryOperation
-
-case class DirectoryReq(actorName: String, actorType: ActorType) extends DirectoryOperation
-
-case class DirectoryResp(actorName: String, actor: ActorRef) extends DirectoryOperation
+case class DirectoryResp(name: String, actor: ActorRef) extends DirectoryOperation
 
 sealed trait ActorType
 
@@ -23,89 +22,39 @@ case object TypeSession extends ActorType
 
 case object TypeTopic extends ActorType
 
-trait DirectoryMonitorActor extends Actor with ActorLogging {
-  override def preStart = {
-    ActorContainer.directoryOperation(Register(self.path.name, actorType), context, self)
+class DirectoryProxy extends Actor with ActorLogging {
+
+  var router = {
+    val routees = Vector.fill(5) {
+      val r = context.actorOf(Props[Directory])
+      context watch r
+      ActorRefRoutee(r)
+    }
+    Router(RoundRobinRoutingLogic(), routees)
   }
 
-  override def postStop = {
-    //    ActorContainer.directoryOperation(Remove(self.path.name, actorType), context, self)
-  }
+  def receive = {
+    case request: DirectoryReq => router.route(request, sender)
 
-  def actorType: ActorType
+    case Terminated(a) =>
+      router = router.removeRoutee(a)
+      val r = context.actorOf(Props[Directory])
+      context watch r
+      router = router.addRoutee(r)
+  }
 }
 
 class Directory extends Actor with ActorLogging {
-  var sessionActorMap: Map[String, ActorRef] = Map()
-  var topicActorMap: Map[String, ActorRef] = Map()
+  implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
+  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
   def receive = {
-    case Register(name, actorType) => {
-      log.info("register actor : " + name + "\t" + sender.path)
-      context.watch(sender)
-      actorType match {
-        case TypeSession => sessionActorMap = sessionActorMap.updated(name, sender)
-        case TypeTopic => topicActorMap = topicActorMap.updated(name, sender)
-      }
-      sender() ! RegisterAck(name)
-    }
-
-    case Remove(name, actorType) => {
-      log.info("remove actor : " + name + "\t" + sender.path)
-      context.unwatch(sender)
-
-      actorType match {
-        case TypeSession => sessionActorMap = sessionActorMap - name
-        case TypeTopic => topicActorMap = topicActorMap - name
-      }
-      sender() ! RemoveAck(name)
-    }
-
     case DirectoryReq(name, actorType) => {
-      val originalSender = sender;
-
-      val returnActor = context.actorOf(Props(new Actor {
-        def receive = {
-          case newActor: ActorRef =>
-            originalSender ! DirectoryResp(name, newActor)
-            context.stop(self)
-        }
-      }))
-      actorType match {
-        case TypeSession => sessionActorMap.get(name) match {
-          case Some(x) => {
-            log.info("load exist actor : {}", x.path)
-            returnActor ! x
-          }
-          case None => ActorContainer.sessionCreator.tell(name, returnActor)
-        }
-
-        case TypeTopic => topicActorMap.get(name) match {
-          case Some(x) => {
-            log.info("load exist actor : {}", x.path)
-            returnActor ! x
-          }
-          case None => ActorContainer.topicCreator.tell(name, returnActor)
-        }
-
+      sender ! DirectoryResp(name, actorType match {
+        case TypeSession => Await.result(ActorContainer.sessionRoot ? name, Duration.Inf).asInstanceOf[ActorRef]
+        case TypeTopic => Await.result(ActorContainer.topicRoot ? name, Duration.Inf).asInstanceOf[ActorRef]
       }
-
-    }
-    case Terminated(x) => {
-      log.info("Terminated actor({})", x.path)
-      x.path.parent.name match {
-        case "session" =>
-          sessionActorMap.foreach(each => if (each._2 == x) {
-            println(each._1 + "is terminated")
-            self ! Remove(each._1, TypeSession)
-          })
-        case other =>
-          topicActorMap.foreach(each => if (each._2 == x) {
-            println(each._1 + "is terminated")
-            self ! Remove(each._1, TypeTopic)
-          })
-
-      }
+      )
     }
   }
 

@@ -36,6 +36,5 @@ class Storage {
     topics = List()
     messages = List()
     messageInProcessing = List()
-    packetIdGenerator.set(System.currentTimeMillis())
   }
 }
