@@ -9,7 +9,6 @@ import com.typesafe.config.ConfigFactory
 class Server extends Actor with ActorLogging {
 
   import Tcp._
-  import akka.util.Timeout
   import context.system
 
   import scala.concurrent.ExecutionContext
@@ -20,7 +19,6 @@ class Server extends Actor with ActorLogging {
 
   IO(Tcp) ! Bind(self, new InetSocketAddress(config.getString("mqtt.broker.hostname"), config.getInt("mqtt.broker.port")))
 
-  implicit val timeout = Timeout(5, java.util.concurrent.TimeUnit.SECONDS)
 
   def receive = {
     case Bound(localAddress) =>
@@ -29,8 +27,8 @@ class Server extends Actor with ActorLogging {
 
     case Connected(remote, local) =>
       log.info("new connection" + remote)
-      val handler = context.actorOf(Props[PacketBridge])
       val connection = sender()
+      val handler = context.actorOf(Props(classOf[PacketBridge], connection))
       connection ! Register(handler)
   }
 }

@@ -5,19 +5,23 @@ import plantae.citrus.mqtt.actors.directory.{ActorType, DirectoryMonitorActor, T
 
 import scala.collection.mutable.Map
 
-case class Subscribe(clientId: String)
+sealed trait TopicRequest
 
-case class Unsubscribe(clientId: String)
+sealed trait TopicResponse
 
-case object ClearList
+case class Subscribe(clientId: String) extends TopicRequest
 
-case class TopicInMessage(payload: Array[Byte], qos: Int, retain: Boolean, packetId: Option[Int])
+case class Unsubscribe(clientId: String) extends TopicRequest
 
-case object TopicInMessageAck
+case object ClearList extends TopicRequest
 
-case class TopicOutMessage(payload: Array[Byte], qos: Int, retain: Boolean, topic: String)
+case class TopicInMessage(payload: Array[Byte], qos: Short, retain: Boolean, packetId: Option[Int]) extends TopicRequest
 
-case object TopicOutMessageAck
+case object TopicInMessageAck extends TopicResponse
+
+case class TopicOutMessage(payload: Array[Byte], qos: Short, retain: Boolean, topic: String) extends TopicResponse
+
+case object TopicOutMessageAck extends TopicRequest
 
 class TopicCreator extends Actor with ActorLogging {
 
@@ -35,7 +39,7 @@ class Topic extends DirectoryMonitorActor with ActorLogging {
 
   def receive = {
     case Subscribe(clientId) => {
-      log.debug("Subscribe client({}) topic({})", clientId, self.path.name)
+      log.info("Subscribe client({}) topic({})", clientId, self.path.name)
       subscriberMap.+=((clientId, sender))
       printEverySubscriber
     }

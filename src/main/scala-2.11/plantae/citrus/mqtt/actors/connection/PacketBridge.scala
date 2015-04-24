@@ -2,14 +2,13 @@ package plantae.citrus.mqtt.actors.connection
 
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ActorLogging, Actor, ActorRef, Props}
-import akka.event.Logging
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.io.Tcp.{PeerClosed, Received, Write}
 import akka.pattern.ask
 import akka.util.ByteString
 import plantae.citrus.mqtt.actors.ActorContainer
 import plantae.citrus.mqtt.actors.directory._
-import plantae.citrus.mqtt.actors.session.{MqttOutboundPacket, ClientCloseConnection, MqttInboundPacket, SessionReset}
+import plantae.citrus.mqtt.actors.session.{ClientCloseConnection, MQTTInboundPacket, MQTTOutboundPacket, SessionReset}
 import plantae.citrus.mqtt.dto.PacketDecoder
 import plantae.citrus.mqtt.dto.connect._
 import plantae.citrus.mqtt.dto.ping._
@@ -17,52 +16,49 @@ import plantae.citrus.mqtt.dto.publish._
 import plantae.citrus.mqtt.dto.subscribe.SUBSCRIBE
 import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBE
 
-import scala.concurrent.{ExecutionContext, Await}
 import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext}
 
 
 /**
  * Created by yinjae on 15. 4. 21..
  */
-class PacketBridge extends Actor with ActorLogging{
+class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
   implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
   var session: ActorRef = null
-  var socket: ActorRef = null
+  val bridge = self
 
   def receive = {
 
-    case MqttOutboundPacket(packet) => {
-      log.info("out - mqtt header {}" , packet.fixedHeader.packetType.hexa)
+    case MQTTOutboundPacket(packet) => {
       socket ! Write(ByteString(packet.encode))
     }
 
     case Received(data) => {
       PacketDecoder.decode(data.toArray[Byte]) match {
         case connect: CONNECT => {
-          socket = sender
-          val bridgeActor = self
           val get = Get(connect.clientId.value, connect.cleanSession)
           context.actorOf(Props(classOf[SessionChecker], this)).tell(get,
             context.actorOf(Props(new Actor {
               def receive = {
                 case clientSession: ActorRef =>
                   session = clientSession
-                  session.tell(MqttInboundPacket(connect), bridgeActor)
+                  session.tell(MQTTInboundPacket(connect), bridge)
                   context.stop(self)
               }
             })))
         }
-        case mqttPacket: PUBLISH => session ! MqttInboundPacket(mqttPacket)
-        case mqttPacket: PUBACK => session ! MqttInboundPacket(mqttPacket)
-        case mqttPacket: PUBREC => session ! MqttInboundPacket(mqttPacket)
-        case mqttPacket: PUBREL => session ! MqttInboundPacket(mqttPacket)
-        case mqttPacket: PUBCOMB => session ! MqttInboundPacket(mqttPacket)
-        case mqttPacket: SUBSCRIBE => session ! MqttInboundPacket(mqttPacket)
-        case mqttPacket: UNSUBSCRIBE => session ! MqttInboundPacket(mqttPacket)
-        case PINGREQ => session ! MqttInboundPacket(PINGREQ)
-        case DISCONNECT => session ! MqttInboundPacket(DISCONNECT)
+        case mqttPacket: PUBLISH => session ! MQTTInboundPacket(mqttPacket)
+        case mqttPacket: PUBACK => session ! MQTTInboundPacket(mqttPacket)
+        case mqttPacket: PUBREC => session ! MQTTInboundPacket(mqttPacket)
+        case mqttPacket: PUBREL => session ! MQTTInboundPacket(mqttPacket)
+        case mqttPacket: PUBCOMB => session ! MQTTInboundPacket(mqttPacket)
+        case mqttPacket: SUBSCRIBE => session ! MQTTInboundPacket(mqttPacket)
+        case mqttPacket: UNSUBSCRIBE => session ! MQTTInboundPacket(mqttPacket)
+        case PINGREQ => session ! MQTTInboundPacket(PINGREQ)
+        case DISCONNECT => session ! MQTTInboundPacket(DISCONNECT)
       }
     }
     case PeerClosed => {
@@ -79,7 +75,7 @@ class PacketBridge extends Actor with ActorLogging{
         def receive = {
           case clientSession: ActorRef =>
             session = clientSession
-            session.tell(MqttInboundPacket(connect), bridgeActor)
+            session.tell(MQTTInboundPacket(connect), bridgeActor)
             context.stop(self)
         }
       })))
@@ -88,6 +84,16 @@ class PacketBridge extends Actor with ActorLogging{
   case class Get(clientId: String, cleanSession: Boolean)
 
   class SessionChecker extends Actor {
+    override def preStart = {
+      super.preStart
+      log.debug("create session checker {}", self.path.name)
+    }
+
+    override def postStop = {
+      super.postStop
+      log.debug("remove session checker {}", self.path.name)
+    }
+
 
     def receive = {
       case Get(clientId, cleanSession) => {
