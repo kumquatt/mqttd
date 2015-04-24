@@ -20,7 +20,6 @@ libraryDependencies ++= {
     "com.typesafe.akka" % "akka-remote_2.11" % akkaVersion,
     "com.typesafe.akka" % "akka-contrib_2.11" % akkaVersion,
     "com.typesafe.akka" % "akka-slf4j_2.11" % akkaVersion,
-//    "com.typesafe.scala-logging" % "scala-logging-slf4j_2.11" % "2.1.2",
     "ch.qos.logback" % "logback-classic" % "1.1.2",
 
     "junit" % "junit" % "4.10",

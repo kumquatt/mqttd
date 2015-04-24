@@ -7,7 +7,7 @@ object Paho extends App {
   new Thread() {
     override def run: Unit = {
       var option = new MqttConnectOptions()
-      var client = new MqttClient("tcp://localhost:8888", "customer_1")
+      var client = new MqttClient("tcp://10.202.208.200:8888", "customer_1")
       client.setCallback(
         new MqttCallback {
           override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
