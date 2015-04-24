@@ -4,6 +4,7 @@ import java.net.InetSocketAddress
 
 import akka.actor.{Actor, ActorLogging, Props}
 import akka.io.{IO, Tcp}
+import com.typesafe.config.ConfigFactory
 
 class Server extends Actor with ActorLogging {
 
@@ -15,7 +16,9 @@ class Server extends Actor with ActorLogging {
 
   implicit val ec = ExecutionContext.global
 
-  IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", 8888))
+  val config = ConfigFactory.load()
+
+  IO(Tcp) ! Bind(self, new InetSocketAddress(config.getString("mqtt.broker.hostname"), config.getInt("mqtt.broker.port")))
 
   implicit val timeout = Timeout(5, java.util.concurrent.TimeUnit.SECONDS)
 

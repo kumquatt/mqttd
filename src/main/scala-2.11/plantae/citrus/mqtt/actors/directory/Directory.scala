@@ -1,6 +1,6 @@
 package plantae.citrus.mqtt.actors.directory
 
-import akka.actor.{Actor, ActorRef, Props, Terminated}
+import akka.actor._
 import akka.event.Logging
 import plantae.citrus.mqtt.actors._
 
@@ -24,7 +24,7 @@ case object TypeSession extends ActorType
 
 case object TypeTopic extends ActorType
 
-trait DirectoryMonitorActor extends Actor {
+trait DirectoryMonitorActor extends Actor with ActorLogging {
   override def preStart = {
     ActorContainer.directoryOperation(Register(self.path.name, actorType), context, self)
   }
@@ -36,14 +36,13 @@ trait DirectoryMonitorActor extends Actor {
   def actorType: ActorType
 }
 
-class Directory extends Actor {
-  private val logger = Logging(context.system, this)
+class Directory extends Actor with ActorLogging{
   var sessionActorMap: Map[String, ActorRef] = Map()
   var topicActorMap: Map[String, ActorRef] = Map()
 
   def receive = {
     case Register(name, actorType) => {
-      logger.info("register actor : " + name + "\t" + sender.path)
+      log.info("register actor : " + name + "\t" + sender.path)
       context.watch(sender)
       actorType match {
         case TypeSession => sessionActorMap = sessionActorMap.updated(name, sender)
@@ -53,7 +52,7 @@ class Directory extends Actor {
     }
 
     case Remove(name, actorType) => {
-      logger.info("remove actor : " + name + "\t" + sender.path)
+      log.info("remove actor : " + name + "\t" + sender.path)
       context.unwatch(sender)
 
       actorType match {
@@ -76,7 +75,7 @@ class Directory extends Actor {
       actorType match {
         case TypeSession => sessionActorMap.get(name) match {
           case Some(x) => {
-            logger.info("load exist actor : {}", x.path)
+            log.info("load exist actor : {}", x.path)
             returnActor ! x
           }
           case None => ActorContainer.sessionCreator.tell(name, returnActor)
@@ -84,7 +83,7 @@ class Directory extends Actor {
 
         case TypeTopic => topicActorMap.get(name) match {
           case Some(x) => {
-            logger.info("load exist actor : {}", x.path)
+            log.info("load exist actor : {}", x.path)
             returnActor ! x
           }
           case None => ActorContainer.topicCreator.tell(name, returnActor)
@@ -94,7 +93,7 @@ class Directory extends Actor {
 
     }
     case Terminated(x) => {
-      println(x.path)
+      log.info("Terminated actor({})",x.path)
       x.path.parent.name match {
         case "session" =>
           sessionActorMap.foreach(each => if (each._2 == x) {

@@ -31,8 +31,7 @@ class DirectoryProxyMaster extends Actor with ActorLogging {
   }
 }
 
-class DirectoryProxyWorker extends Actor {
-  private val logger = Logging(context.system, this)
+class DirectoryProxyWorker extends Actor with ActorLogging {
 
   def receive = {
     case GetDirectoryActor =>

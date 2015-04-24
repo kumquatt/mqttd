@@ -2,9 +2,10 @@ package plantae.citrus.mqtt.actors.session
 
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor._
+import akka.event.Logging
 import akka.pattern.ask
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.directory._
@@ -28,7 +29,7 @@ sealed trait SessionCommand
 
 case object SessionReset extends SessionCommand
 
-case object SessionResetAck
+case object SessionResetAck extends SessionCommand
 
 case object SessionKeepAliveTimeOut extends SessionCommand
 
@@ -47,6 +48,7 @@ class Session extends DirectoryMonitorActor with ActorLogging {
   implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
+  case class ConnectionStatus(will: Option[Will], keepAliveTime: Int)
 
   var connectionStatus: Option[ConnectionStatus] = None
   val storage = new Storage()
@@ -60,7 +62,6 @@ class Session extends DirectoryMonitorActor with ActorLogging {
     case RegisterAck(name) => {
       log.info("receive register ack")
     }
-    case OutboundPublishComplete => invokePublish
     case everythingElse => println(everythingElse)
   }
 

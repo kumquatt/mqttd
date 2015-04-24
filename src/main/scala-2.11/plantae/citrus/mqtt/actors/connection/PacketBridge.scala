@@ -28,8 +28,6 @@ class PacketBridge extends Actor with ActorLogging{
   implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
-
-  private val logger = Logging(context.system, this)
   var session: ActorRef = null
   var socket: ActorRef = null
 
@@ -90,7 +88,6 @@ class PacketBridge extends Actor with ActorLogging{
   case class Get(clientId: String, cleanSession: Boolean)
 
   class SessionChecker extends Actor {
-    private val logger = Logging(context.system, this)
 
     def receive = {
       case Get(clientId, cleanSession) => {
@@ -104,11 +101,11 @@ class PacketBridge extends Actor with ActorLogging{
             a.actor.tell(DirectoryReq(clientId, TypeSession), context.actorOf(Props(new Actor {
               override def receive = {
                 case DirectoryResp(name, getOrCreateSession) => {
-                  logger.info("load success DirectoryService")
+                  log.info("load success DirectoryService")
                   if (cleanSession) {
                     getOrCreateSession ! SessionReset
                   }
-                  logger.info("clientSession[{}] is passed to [{}]", getOrCreateSession.path.name, doSessionActor.path.name)
+                  log.info("clientSession[{}] is passed to [{}]", getOrCreateSession.path.name, doSessionActor.path.name)
                   doSessionActor ! getOrCreateSession
                   context.stop(sessionChecker)
                 }
