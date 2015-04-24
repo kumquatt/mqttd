@@ -18,7 +18,7 @@ class Server extends Actor with ActorLogging {
 
   val config = ConfigFactory.load()
 
-  IO(Tcp) ! Bind(self, new InetSocketAddress("localhost", config.getInt("mqtt.broker.port")))
+  IO(Tcp) ! Bind(self, new InetSocketAddress(config.getString("mqtt.broker.hostname"), config.getInt("mqtt.broker.port")))
 
   implicit val timeout = Timeout(5, java.util.concurrent.TimeUnit.SECONDS)
 
