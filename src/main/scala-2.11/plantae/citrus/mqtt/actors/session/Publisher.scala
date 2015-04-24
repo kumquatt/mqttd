@@ -2,10 +2,10 @@ package plantae.citrus.mqtt.actors.session
 
 import akka.actor._
 import plantae.citrus.mqtt.actors.ActorContainer
-import plantae.citrus.mqtt.actors.directory.{DirectoryResp, DirectoryReq, TypeTopic}
-import plantae.citrus.mqtt.actors.topic.{TopicMessageAck, TopicMessage}
-import plantae.citrus.mqtt.dto.INT
+import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectoryResp, TypeTopic}
+import plantae.citrus.mqtt.actors.topic.{TopicInMessage, TopicInMessageAck}
 import plantae.citrus.mqtt.dto.publish._
+import plantae.citrus.mqtt.dto.{INT, PUBLISHPAYLOAD, STRING}
 
 
 case object uninitialized
@@ -17,6 +17,8 @@ sealed trait inbound extends state
 sealed trait outbound extends state
 
 case object waitPublish extends inbound with outbound
+
+case object resume extends inbound with outbound
 
 case object waitTopicResponseQos0 extends inbound
 
@@ -34,33 +36,41 @@ case object waitPubComb extends outbound
 
 object PublishConstant {
   val inboundPrefix = "publish:inbound-"
-  val outboundPrefix = "publish:inbound-"
+  val outboundPrefix = "publish:outbound-"
 }
 
-class OutboundPublisher(client: ActorRef) extends FSM[outbound, Any] with ActorLogging {
+class OutboundPublisher(client: ActorRef, packetId: Option[Short]) extends FSM[outbound, Any] with ActorLogging {
   val publishActor = self
 
   override def preStart {
-    log.info("start publish outbound handler - " + self.path.name)
+    log.debug("start publish outbound handler - " + self.path.name)
     super.preStart
   }
 
   override def postStop {
-    log.info("stop publish outbound handler - " + self.path.name)
+    log.debug("stop publish outbound handler - " + self.path.name)
     super.postStop
-
   }
 
   startWith(waitPublish, uninitialized)
 
   when(waitPublish) {
-    case Event(publish: PUBLISH, waitPublish) =>
-      client ! MqttOutboundPacket(publish)
-      publish.qos.value match {
+    case Event((payload: Array[Byte], qos: Short, retain: Boolean, topic: String), waitPublish) =>
+      client ! MqttOutboundPacket(PUBLISH(false, INT(qos), retain, STRING(topic), {
+        qos match {
+          case 0 => None
+          case x if (x > 0) => packetId match {
+            case Some(y) => Some(INT(y))
+            case None => None
+          }
+        }
+      }, PUBLISHPAYLOAD(payload)))
+      qos match {
         case 0 => stop(FSM.Shutdown)
         case 1 => goto(waitPubAck)
         case 2 => goto(waitPubRec)
       }
+
 
   }
 
@@ -69,11 +79,14 @@ class OutboundPublisher(client: ActorRef) extends FSM[outbound, Any] with ActorL
   }
 
   when(waitPubRec) {
-    case Event(PUBREC(packetId), waitPublish) => goto(waitPubComb)
+    case Event(PUBREC(packetId), waitPublish) =>
+      client ! MqttOutboundPacket(PUBREL(packetId))
+      goto(waitPubComb)
   }
 
   when(waitPubComb) {
-    case Event(PUBCOMB(packetId), waitPubRec) => goto(waitPubComb)
+    case Event(PUBCOMB(packetId), waitPubRec) =>
+      stop(FSM.Shutdown)
   }
 
 }
@@ -84,17 +97,19 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[inbound, Any] w
 
   val packetId: Option[Short] = qos match {
     case 0 => None
-    case anyOther if (anyOther > 0) => Some(publishActor.path.name.drop(PublishConstant.inboundPrefix.length).toShort)
+    case anyOther if (anyOther > 0) => Some(
+      publishActor.path.name.drop(PublishConstant.inboundPrefix.length).toShort
+    )
   }
 
   override def preStart {
-    log.info("start publish inbound handler - " + self.path.name)
+    log.debug("start publish inbound handler - " + self.path.name)
     super.preStart
 
   }
 
   override def postStop {
-    log.info("stop publish inbound handler - " + self.path.name)
+    log.debug("stop publish inbound handler - " + self.path.name)
     super.postStop
 
   }
@@ -104,19 +119,19 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[inbound, Any] w
 
   when(waitPublish) {
     case Event(publish: PUBLISH, waitPublish) =>
-      val relay = context.actorOf(Props(new Actor {
-        override def receive = {
-          case DirectoryResp(name, actor) =>
-            actor.tell(
-              TopicMessage(publish.data.value, publish.qos.value, publish.retain,
-                publish.packetId match {
-                  case Some(x) => Some(x.value)
-                  case None => None
-                }
-              ), publishActor)
-        }
-      }))
-      ActorContainer.directory.tell(DirectoryReq(publish.topic.value, TypeTopic), relay)
+      ActorContainer.invokeCallback(DirectoryReq(publish.topic.value, TypeTopic), context, {
+        case DirectoryResp(name, actor) =>
+          actor.tell(
+            TopicInMessage(publish.data.value, publish.qos.value, publish.retain,
+              publish.packetId match {
+                case Some(x) => Some(x.value)
+                case None => None
+              }
+            ), publishActor)
+      }
+
+
+      )
 
       publish.qos.value match {
         case 0 => goto(waitTopicResponseQos0)
@@ -127,23 +142,22 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[inbound, Any] w
   }
 
   when(waitTopicResponseQos0) {
-    case Event(TopicMessageAck, waitPublish) =>
+    case Event(TopicInMessageAck, waitPublish) =>
       stop(FSM.Shutdown)
   }
 
 
   when(waitTopicResponseQos1) {
-    case Event(TopicMessageAck, waitPublish) =>
+    case Event(TopicInMessageAck, waitPublish) =>
       packetId match {
         case Some(x) =>
           client ! MqttOutboundPacket(PUBACK(INT(x)))
           stop(FSM.Shutdown)
-        case None => stop(FSM.Shutdown)
       }
   }
 
   when(waitTopicResponseQos2) {
-    case Event(TopicMessageAck, waitPublish) =>
+    case Event(TopicInMessageAck, waitPublish) =>
       packetId match {
         case Some(x) =>
           client ! MqttOutboundPacket(PUBREC(INT(x)))

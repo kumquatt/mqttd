@@ -17,7 +17,6 @@ class DirectoryProxyMaster extends Actor with ActorLogging {
       context watch r
       ActorRefRoutee(r)
     }
-
     Router(RoundRobinRoutingLogic(), routees)
   }
 

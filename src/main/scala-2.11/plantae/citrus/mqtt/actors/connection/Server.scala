@@ -20,15 +20,14 @@ class Server extends Actor with ActorLogging {
   implicit val timeout = Timeout(5, java.util.concurrent.TimeUnit.SECONDS)
 
   def receive = {
-    case b@Bound(localAddress) =>
+    case Bound(localAddress) =>
 
     case CommandFailed(_: Bind) => context stop self
 
-    case c@Connected(remote, local) =>
+    case Connected(remote, local) =>
       log.info("new connection" + remote)
       val handler = context.actorOf(Props[PacketBridge])
       val connection = sender()
       connection ! Register(handler)
-
   }
 }

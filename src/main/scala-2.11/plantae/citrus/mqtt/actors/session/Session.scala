@@ -2,19 +2,20 @@ package plantae.citrus.mqtt.actors.session
 
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor._
 import akka.event.Logging
 import akka.pattern.ask
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.directory._
-import plantae.citrus.mqtt.actors.topic.Subscribe
+import plantae.citrus.mqtt.actors.topic.{Subscribe, TopicOutMessage}
 import plantae.citrus.mqtt.dto._
 import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, DISCONNECT, ReturnCode, Will}
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
 import plantae.citrus.mqtt.dto.publish._
 import plantae.citrus.mqtt.dto.subscribe.{SUBACK, SUBSCRIBE, TopicFilter}
-import plantae.citrus.mqtt.dto.unsubscribe.UNSUBSCRIBE
+import plantae.citrus.mqtt.dto.unsubscribe.{UNSUBACK, UNSUBSCRIBE}
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext}
@@ -53,17 +54,24 @@ class Session extends DirectoryMonitorActor with ActorLogging {
 
   var connectionStatus: Option[ConnectionStatus] = None
   var keepAliveTimer: Option[Cancellable] = None
-
+  val packetIdGen = new AtomicInteger()
+  var socket:ActorRef = null
 
   override def actorType: ActorType = TypeSession
 
   override def receive: Receive = {
     case MqttInboundPacket(packet) => mqttPacket(packet, sender)
     case command: SessionCommand => session(command)
+    case topicMessage: TopicOutMessage => topicPacket(topicMessage, sender)
     case RegisterAck(name) => {
       log.info("receive register ack")
     }
     case everythingElse => println(everythingElse)
+  }
+
+  def topicPacket(message: TopicOutMessage, sender: ActorRef) {
+    val packetId = packetIdGen.incrementAndGet().toShort
+    context.actorOf(Props(classOf[OutboundPublisher], socket, Some(packetId)), PublishConstant.outboundPrefix + packetId) !(message.payload, message.qos.toShort, message.retain, message.topic)
   }
 
 
@@ -88,6 +96,93 @@ class Session extends DirectoryMonitorActor with ActorLogging {
 
   }
 
+  def mqttPacket(packet: Packet, bridge: ActorRef): Unit = {
+    resetTimer
+    packet match {
+      case mqtt: CONNECT =>
+        socket = sender
+        connectionStatus = Some(ConnectionStatus(mqtt.will, mqtt.keepAlive.value))
+        bridge ! MqttOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
+      case PINGREQ =>
+        bridge ! MqttOutboundPacket(PINGRESP)
+
+      case mqtt: PUBLISH => {
+        context.actorOf(Props(classOf[InboundPublisher], sender, mqtt.qos.value), {
+          mqtt.qos.value match {
+            case 0 => UUID.randomUUID().toString
+            case 1 => PublishConstant.inboundPrefix + mqtt.packetId.get.value
+            case 2 => PublishConstant.inboundPrefix + mqtt.packetId.get.value
+          }
+        }) ! mqtt
+      }
+      case mqtt: PUBREL =>
+        context.child(PublishConstant.inboundPrefix + mqtt.packetId.value) match {
+          case Some(x) => x ! mqtt
+          case None => log.error("can't find publish inbound actor {}", PublishConstant.inboundPrefix + mqtt.packetId.value)
+        }
+      case mqtt: PUBREC =>
+        context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
+          case Some(x) => x ! mqtt
+          case None => log.error("can't find publish outbound actor {}", PublishConstant.outboundPrefix + mqtt.packetId.value)
+
+        }
+      case mqtt: PUBACK =>
+        context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
+          case Some(x) => x ! mqtt
+            println(x)
+          case None => log.error("can't find publish outbound actor {}", PublishConstant.outboundPrefix + mqtt.packetId.value)
+
+        }
+      case mqtt: PUBCOMB =>
+        context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
+          case Some(x) => x ! mqtt
+          case None => log.error("can't find publish outbound actor {}", PublishConstant.outboundPrefix + mqtt.packetId.value)
+        }
+
+      case DISCONNECT => {
+        connectionStatus = None
+        cancelTimer
+      }
+
+      case subscribe: SUBSCRIBE =>
+        val subscribeResult = subscribeTopics(subscribe.topicFilter)
+        sender ! MqttOutboundPacket(SUBACK(subscribe.packetId, subscribeResult))
+
+      case unsubscribe: UNSUBSCRIBE =>
+        unsubscribeTopics(unsubscribe.topicFilter)
+        sender ! MqttOutboundPacket(UNSUBACK(unsubscribe.packetId))
+    }
+
+  }
+
+  def subscribeTopics(topicFilters: List[TopicFilter]): List[BYTE] = {
+    val clientId = self.path.name
+
+    val result = topicFilters.map(tp =>
+      Await.result(ActorContainer.directory ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
+        case DirectoryResp(topicName, option) =>
+          option ! Subscribe(self.path.name)
+          BYTE(0x00)
+      }
+    )
+    result
+  }
+
+  def unsubscribeTopics(topics: List[STRING]) = {
+    topics.foreach(x => {
+      ActorContainer.invokeCallback(DirectoryReq(x.value, TypeTopic), context, {
+        case DirectoryResp(name, topicActor) =>
+          topicActor != UNSUBSCRIBE
+      })
+    }
+    )
+
+  }
+
+  def doConnect(connect: CONNECT): CONNACK = {
+    CONNACK(true, ReturnCode.connectionAccepted)
+  }
+
   def cancelTimer = {
     keepAliveTimer match {
       case Some(x) => x.cancel()
@@ -106,87 +201,5 @@ class Session extends DirectoryMonitorActor with ActorLogging {
     }
   }
 
-  def mqttPacket(packet: Packet, bridge: ActorRef): Unit = {
-
-    packet match {
-      case mqtt: CONNECT =>
-        connectionStatus = Some(ConnectionStatus(mqtt.will, mqtt.keepAlive.value))
-        bridge ! MqttOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
-        resetTimer
-      case PINGREQ =>
-        resetTimer
-        bridge ! MqttOutboundPacket(PINGRESP)
-      case mqtt: PUBLISH => {
-        context.actorOf(Props(classOf[InboundPublisher], sender, mqtt.qos.value), {
-          mqtt.qos.value match {
-            case 0 => UUID.randomUUID().toString
-            case 1 => PublishConstant.inboundPrefix + mqtt.packetId.get.value
-            case 2 => PublishConstant.inboundPrefix + mqtt.packetId.get.value
-          }
-        }) ! mqtt
-      }
-      case mqtt: PUBREL =>
-        context.child(PublishConstant.inboundPrefix + mqtt.packetId.value) match {
-          case Some(x) => x ! mqtt
-          case None => log.error("can't find publish inbound actor {}", PublishConstant.inboundPrefix + mqtt.packetId.value)
-        }
-      case mqtt: PUBREC =>
-        context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
-          case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", PublishConstant.inboundPrefix + mqtt.packetId.value)
-
-        }
-      case mqtt: PUBACK =>
-        context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
-          case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", PublishConstant.inboundPrefix + mqtt.packetId.value)
-
-        }
-      case mqtt: PUBCOMB =>
-        context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
-          case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", PublishConstant.inboundPrefix + mqtt.packetId.value)
-        }
-
-      case DISCONNECT => {
-        connectionStatus = None
-        cancelTimer
-      }
-
-      case subscribe: SUBSCRIBE =>
-        val subscribeResult = subscribeToTopics(subscribe.topicFilter)
-
-        subscribeResult.foreach(b =>
-          log.info("... " + b)
-        )
-        sender ! MqttOutboundPacket(SUBACK(subscribe.packetId, subscribeResult))
-      //        sender ! MqttOutboundPacket(SUBACK(subscribe.packetId ,subscribe.topicFilter.foldRight(List[BYTE]())((x,accum) => BYTE(0x00) ::accum )))
-
-
-      case unsubscribe: UNSUBSCRIBE =>
-        unsubscribeToTopics(unsubscribe.topicFilter)
-    }
-
-  }
-
-  def subscribeToTopics(topicFilters: List[TopicFilter]): List[BYTE] = {
-    val clientId = self.path.name
-
-    val result = topicFilters.map(tp =>
-      Await.result(ActorContainer.directory ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
-        case DirectoryResp(topicName, option) =>
-          option ! Subscribe(self.path.name)
-          BYTE(0x00)
-      }
-    )
-    result
-  }
-
-  def unsubscribeToTopics(topics: List[STRING]) = {
-  }
-
-  def doConnect(connect: CONNECT): CONNACK = {
-    CONNACK(true, ReturnCode.connectionAccepted)
-  }
 
 }

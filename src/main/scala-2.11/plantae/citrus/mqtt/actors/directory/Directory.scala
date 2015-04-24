@@ -4,18 +4,19 @@ import akka.actor.{Actor, ActorRef, Props, Terminated}
 import akka.event.Logging
 import plantae.citrus.mqtt.actors._
 
+sealed trait DirectoryOperation
 
-case class Register(actorName: String, actorType: ActorType)
+case class Register(actorName: String, actorType: ActorType) extends DirectoryOperation
 
-case class RegisterAck(actorName: String)
+case class RegisterAck(actorName: String) extends DirectoryOperation
 
-case class Remove(actorName: String, actorType: ActorType)
+case class Remove(actorName: String, actorType: ActorType) extends DirectoryOperation
 
-case class RemoveAck(actorName: String)
+case class RemoveAck(actorName: String) extends DirectoryOperation
 
-case class DirectoryReq(actorName: String, actorType: ActorType)
+case class DirectoryReq(actorName: String, actorType: ActorType) extends DirectoryOperation
 
-case class DirectoryResp(actorName: String, actor: ActorRef)
+case class DirectoryResp(actorName: String, actor: ActorRef) extends DirectoryOperation
 
 sealed trait ActorType
 
@@ -25,11 +26,11 @@ case object TypeTopic extends ActorType
 
 trait DirectoryMonitorActor extends Actor {
   override def preStart = {
-    ActorContainer.directory ! Register(self.path.name, actorType)
+    ActorContainer.directoryOperation(Register(self.path.name, actorType), context, self)
   }
 
   override def postStop = {
-    ActorContainer.directory ! Remove(self.path.name, actorType)
+    ActorContainer.directoryOperation(Remove(self.path.name, actorType), context, self)
   }
 
   def actorType: ActorType

@@ -11,15 +11,19 @@ case class Unsubscribe(clientId: String)
 
 case object ClearList
 
-case class TopicMessage(payload: Array[Byte], qos: Int, retain: Boolean, packetId: Option[Int])
+case class TopicInMessage(payload: Array[Byte], qos: Int, retain: Boolean, packetId: Option[Int])
 
-case object TopicMessageAck
+case object TopicInMessageAck
+
+case class TopicOutMessage(payload: Array[Byte], qos: Int, retain: Boolean, topic: String)
+
+case object TopicOutMessageAck
 
 class TopicCreator extends Actor with ActorLogging {
 
   override def receive = {
     case topicName: String => {
-      log.info("new topic is created [{}]", topicName)
+      log.debug("new topic is created [{}]", topicName)
       sender ! context.actorOf(Props[Topic], topicName)
     }
   }
@@ -31,27 +35,31 @@ class Topic extends DirectoryMonitorActor with ActorLogging {
 
   def receive = {
     case Subscribe(clientId) => {
-      log.info("Subscribe client({}) topic({})", clientId, self.path.name)
+      log.debug("Subscribe client({}) topic({})", clientId, self.path.name)
       subscriberMap.+=((clientId, sender))
       printEverySubscriber
     }
 
     case Unsubscribe(clientId) => {
-      log.info("Unsubscribe client({}) topic({})", clientId, self.path.name)
+      log.debug("Unsubscribe client({}) topic({})", clientId, self.path.name)
       subscriberMap.-(clientId)
       printEverySubscriber
     }
 
     case ClearList => {
-      log.info("Clear subscriber list")
+      log.debug("Clear subscriber list")
       subscriberMap.clear()
       printEverySubscriber
     }
 
-    case TopicMessage(payload, qos, retain, packetId) => {
-      log.info("qos : {} , retain : {} , payload : {} , sender {}", qos, retain, new String(payload), sender)
-      sender ! TopicMessageAck
+    case TopicInMessage(payload, qos, retain, packetId) => {
+      log.debug("qos : {} , retain : {} , payload : {} , sender {}", qos, retain, new String(payload), sender)
+      sender ! TopicInMessageAck
+      subscriberMap.values.foreach(
+        (actor) => actor ! TopicOutMessage(payload, qos, retain, self.path.name)
+      )
     }
+    case TopicOutMessageAck =>
   }
 
   def printEverySubscriber = {

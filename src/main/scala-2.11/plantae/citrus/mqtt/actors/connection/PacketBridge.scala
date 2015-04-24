@@ -2,7 +2,7 @@ package plantae.citrus.mqtt.actors.connection
 
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{ActorLogging, Actor, ActorRef, Props}
 import akka.event.Logging
 import akka.io.Tcp.{PeerClosed, Received, Write}
 import akka.pattern.ask
@@ -24,7 +24,7 @@ import scala.concurrent.duration.Duration
 /**
  * Created by yinjae on 15. 4. 21..
  */
-class PacketBridge extends Actor {
+class PacketBridge extends Actor with ActorLogging{
   implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
@@ -36,6 +36,7 @@ class PacketBridge extends Actor {
   def receive = {
 
     case MqttOutboundPacket(packet) => {
+      log.info("out - mqtt header {}" , packet.fixedHeader.packetType.hexa)
       socket ! Write(ByteString(packet.encode))
     }
 
