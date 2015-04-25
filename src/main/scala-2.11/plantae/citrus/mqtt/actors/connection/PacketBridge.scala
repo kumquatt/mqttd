@@ -69,13 +69,13 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
   }
 
   def doSession(connect: CONNECT) = {
-    val bridgeActor = self
-    context.actorOf(Props(classOf[SessionChecker], this)).tell(Get(connect.clientId.value, connect.cleanSession),
+    context.actorOf(Props(classOf[SessionChecker], this))
+      .tell(Get(connect.clientId.value, connect.cleanSession),
       context.actorOf(Props(new Actor {
         def receive = {
           case clientSession: ActorRef =>
             session = clientSession
-            session.tell(MQTTInboundPacket(connect), bridgeActor)
+            session.forward(MQTTInboundPacket(connect))
             context.stop(self)
         }
       })))
@@ -83,7 +83,8 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
 
   case class Get(clientId: String, cleanSession: Boolean)
 
-  class SessionChecker extends Actor {
+  class SessionChecker() extends Actor {
+
     override def preStart = {
       super.preStart
       log.debug("create session checker {}", self.path.name)
@@ -97,9 +98,7 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
 
     def receive = {
       case Get(clientId, cleanSession) => {
-        val sessionChecker = self
-        val doSessionActor = sender
-
+        val doSessionActor: ActorRef = sender()
         ActorContainer.invokeCallback(DirectoryReq(clientId, TypeSession),
         context, {
           case DirectoryResp(name, session) => {
@@ -109,7 +108,6 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
             }
             log.info("clientSession[{}] is passed to [{}]", session.path.name, doSessionActor.path.name)
             doSessionActor ! session
-            context.stop(sessionChecker)
           }
         })
 

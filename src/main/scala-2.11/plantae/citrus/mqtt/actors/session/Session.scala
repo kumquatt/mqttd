@@ -58,8 +58,23 @@ class Session extends Actor with ActorLogging {
     case MQTTInboundPacket(packet) => handleMQTTPacket(packet, sender)
     case sessionRequest: SessionRequest => handleSession(sessionRequest)
     case topicResponse: TopicResponse => handleTopicPacket(topicResponse, sender)
-    case OutboundPublishComplete => invokePublish
+    case x: Outbound => handleOutboundPublish(x)
     case everythingElse => log.error("unexpected message : {}", everythingElse)
+  }
+
+  def handleOutboundPublish(x: Outbound) = {
+    x match {
+      case OutboundPublishDone(packetId, qos) =>
+        qos match {
+          case 0 => invokePublish
+          case 1 => storage.completeQos1(packetId)
+            invokePublish
+          case 2 => storage.progress(packetId)
+        }
+      case OutboundPubCompDone(packetId) =>
+        storage.completeQos2(packetId)
+        invokePublish
+    }
   }
 
   def handleTopicPacket(response: TopicResponse, sender: ActorRef) {
@@ -99,12 +114,17 @@ class Session extends Actor with ActorLogging {
 
   }
 
-  def handleMQTTPacket(packet: Packet, bridge: ActorRef): Unit = {
-    connectionStatus match {
-      case Some(x) => x.resetTimer
-      case None =>
-    }
+  private def resetTimer = connectionStatus match {
+    case Some(x) => x.resetTimer
+    case None =>
+  }
 
+  private def inboundActorName(packetId: INT) = PublishConstant.inboundPrefix + packetId.value
+
+  private def outboundActorName(packetId: INT) = PublishConstant.outboundPrefix + packetId.value
+
+  def handleMQTTPacket(packet: Packet, bridge: ActorRef): Unit = {
+    resetTimer
     packet match {
       case mqtt: CONNECT =>
         connectionStatus = Some(ConnectionStatus(mqtt.will, mqtt.keepAlive.value, self, context, sender))
@@ -116,32 +136,32 @@ class Session extends Actor with ActorLogging {
         context.actorOf(Props(classOf[InboundPublisher], sender, mqtt.qos.value), {
           mqtt.qos.value match {
             case 0 => UUID.randomUUID().toString
-            case 1 => PublishConstant.inboundPrefix + mqtt.packetId.get.value
-            case 2 => PublishConstant.inboundPrefix + mqtt.packetId.get.value
+            case 1 => inboundActorName(mqtt.packetId.get)
+            case 2 => inboundActorName(mqtt.packetId.get)
           }
         }) ! mqtt
       }
       case mqtt: PUBREL =>
-        context.child(PublishConstant.inboundPrefix + mqtt.packetId.value) match {
+        context.child(inboundActorName(mqtt.packetId)) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish inbound actor {}", PublishConstant.inboundPrefix + mqtt.packetId.value)
+          case None => log.error("can't find publish inbound actor {}", inboundActorName(mqtt.packetId))
         }
       case mqtt: PUBREC =>
-        context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
+        context.child(outboundActorName(mqtt.packetId)) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", PublishConstant.outboundPrefix + mqtt.packetId.value)
+          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId))
 
         }
       case mqtt: PUBACK =>
-        context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
+        context.child(outboundActorName(mqtt.packetId)) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", PublishConstant.outboundPrefix + mqtt.packetId.value)
+          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId))
 
         }
       case mqtt: PUBCOMB =>
-        context.child(PublishConstant.outboundPrefix + mqtt.packetId.value) match {
+        context.child(outboundActorName(mqtt.packetId)) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", PublishConstant.outboundPrefix + mqtt.packetId.value)
+          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId))
         }
 
       case DISCONNECT => {
@@ -198,16 +218,16 @@ class Session extends Actor with ActorLogging {
           case Some(x) =>
 
             val actorName = PublishConstant.outboundPrefix + (x.packetId match {
-              case Some(y) => println(y.value);y.value
+              case Some(y) => y.value
               case None => UUID.randomUUID().toString
             })
             context.child(actorName) match {
               case Some(actor) => actor ! x
               case None => context.actorOf(Props(classOf[OutboundPublisher], tcp.socket, session), actorName) ! x
             }
-          case None => log.debug("no message")
+          case None => log.debug("invoke publish but no message")
         }
-      case None => log.debug("no connection")
+      case None => log.debug("invoke publish but no connection")
     }
   }
 

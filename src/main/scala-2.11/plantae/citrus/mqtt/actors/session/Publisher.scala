@@ -16,7 +16,9 @@ sealed trait Inbound extends State
 
 sealed trait Outbound extends State
 
-case object OutboundPublishComplete extends Outbound
+case class OutboundPublishDone(packetId: Short, qos: Short) extends Outbound
+
+case class OutboundPubCompDone(packetId: Short) extends Outbound
 
 case object WaitPublish extends Inbound with Outbound
 
@@ -61,7 +63,7 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
       client ! MQTTOutboundPacket(publish)
       publish.qos.value match {
         case 0 =>
-          session ! OutboundPublishComplete
+          session ! OutboundPublishDone(0,0)
           stop(FSM.Shutdown)
         case 1 => goto(WaitPubAck)
         case 2 => goto(WaitPubRec)
@@ -70,19 +72,20 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
 
   when(WaitPubAck) {
     case Event(PUBACK(packetId), waitPublish) =>
-      session ! OutboundPublishComplete
+      session ! OutboundPublishDone(packetId.value, 1)
       stop(FSM.Shutdown)
   }
 
   when(WaitPubRec) {
     case Event(PUBREC(packetId), waitPublish) =>
+      session ! OutboundPublishDone(packetId.value, 2)
       client ! MQTTOutboundPacket(PUBREL(packetId))
       goto(WaitPubComb)
   }
 
   when(WaitPubComb) {
     case Event(PUBCOMB(packetId), waitPubRec) =>
-      session ! OutboundPublishComplete
+      session ! OutboundPubCompDone(packetId.value)
       stop(FSM.Shutdown)
   }
 }
