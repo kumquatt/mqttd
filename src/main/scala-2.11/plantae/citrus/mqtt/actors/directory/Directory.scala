@@ -16,6 +16,8 @@ case class DirectoryReq(name: String, actorType: ActorType) extends DirectoryOpe
 
 case class DirectoryResp(name: String, actor: ActorRef) extends DirectoryOperation
 
+case class DirectoryResp2(name: String, actors: List[ActorRef]) extends DirectoryOperation
+
 sealed trait ActorType
 
 case object TypeSession extends ActorType
@@ -49,13 +51,23 @@ class Directory extends Actor with ActorLogging {
 
   def receive = {
     case DirectoryReq(name, actorType) => {
-      sender ! DirectoryResp(name,
-        Await.result(
-          (actorType match {
-            case TypeSession => ActorContainer.sessionRoot
-            case TypeTopic => ActorContainer.topicRoot
-          }) ? name, Duration.Inf).asInstanceOf[ActorRef]
-      )
+      actorType match {
+        case TypeSession =>
+          sender ! DirectoryResp(name,
+          Await.result(
+          ActorContainer.sessionRoot ? name, Duration.Inf).asInstanceOf[ActorRef])
+        case TypeTopic =>
+          sender ! DirectoryResp2(name,
+          Await.result(
+          ActorContainer.topicRoot ? name, Duration.Inf).asInstanceOf[List[ActorRef]])
+      }
+//      sender ! DirectoryResp(name,
+//        Await.result(
+//          (actorType match {
+//            case TypeSession => ActorContainer.sessionRoot
+//            case TypeTopic => ActorContainer.topicRoot
+//          }) ? name, Duration.Inf).asInstanceOf[ActorRef]
+//      )
     }
   }
 

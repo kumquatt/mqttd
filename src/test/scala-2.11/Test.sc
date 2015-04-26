@@ -1,16 +1,8 @@
-import plantae.citrus.mqtt.dto.BYTE
 
-0xF0.toByte
-0x0F.toByte
+val a = List(List(1,2,3), List(2), List(3))
 
-BYTE(0x8) << 4
+a.flatten
 
-BYTE(-126) >> 4
+val b = List(1, null, 2, 3)
 
-BYTE(0x8) << 4
-BYTE(0x08) << 4
-BYTE(0x80.toByte)
-
-(BYTE(0x06) << 4)
-
-(BYTE(0x06) << 4 | BYTE(0x02))
+b.filter(x => x != null)

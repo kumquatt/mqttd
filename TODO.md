@@ -20,3 +20,7 @@
 
 11. performance test
 
+12. Topic Tree 를 어떻게 해야 HA 스럽게 만들 것인가??? -- 모든 Node에 복사하게 만드는 방법을 찾아야할 듯
+
+
+

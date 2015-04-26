@@ -1,8 +1,10 @@
 package plantae.citrus.mqtt.actors.topic
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import plantae.citrus.exercise.DiskTreeNode
 
 import scala.collection.mutable.Map
+import scala.util.Random
 
 sealed trait TopicRequest
 
@@ -24,13 +26,26 @@ case object TopicOutMessageAck extends TopicRequest
 
 class TopicRoot extends Actor with ActorLogging {
 
+  val root = DiskTreeNode[ActorRef]("", "", Map[String, DiskTreeNode[ActorRef]]())
+
   override def receive = {
     case topicName: String => {
-      context.child(topicName) match {
-        case Some(x) => sender ! x
-        case None => log.debug("new topic is created [{}]", topicName)
-          sender ! context.actorOf(Props[Topic], topicName)
+      log.info("Topic root {}", topicName)
+      root.getNodes(topicName) match {
+        case Nil => {
+          log.debug("new topic is created[{}]", topicName)
+          val topic = context.actorOf(Props[Topic], Random.alphanumeric.take(128).mkString)
+          root.addNode(topicName, topic)
+          sender ! List(topic)
+        }
+        case topics : List[ActorRef] => sender ! topics
+
       }
+//      context.child(topicName) match {
+//        case Some(x) => sender ! x
+//        case None => log.debug("new topic is created [{}]", topicName)
+//          sender ! context.actorOf(Props[Topic], topicName)
+//      }
     }
   }
 }

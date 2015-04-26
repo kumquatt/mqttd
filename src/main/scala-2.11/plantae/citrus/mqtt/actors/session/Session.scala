@@ -7,7 +7,7 @@ import akka.actor._
 import akka.pattern.ask
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.directory._
-import plantae.citrus.mqtt.actors.topic.{Subscribe, TopicOutMessage, TopicResponse}
+import plantae.citrus.mqtt.actors.topic.{Unsubscribe, Subscribe, TopicOutMessage, TopicResponse}
 import plantae.citrus.mqtt.dto._
 import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, DISCONNECT, ReturnCode}
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
@@ -191,8 +191,9 @@ class Session extends Actor with ActorLogging {
 
     val result = topicFilters.map(tp =>
       Await.result(ActorContainer.directoryProxy ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
-        case DirectoryResp(topicName, option) =>
-          option ! Subscribe(self.path.name)
+        case DirectoryResp2(topicName, options) =>
+          options.foreach(actor => actor ! Subscribe(self.path.name))
+//          option ! Subscribe(self.path.name)
           BYTE(0x00)
       }
     )
@@ -202,8 +203,9 @@ class Session extends Actor with ActorLogging {
   def unsubscribeTopics(topics: List[STRING]) = {
     topics.foreach(x => {
       ActorContainer.invokeCallback(DirectoryReq(x.value, TypeTopic), context, {
-        case DirectoryResp(name, topicActor) =>
-          topicActor != UNSUBSCRIBE
+        case DirectoryResp2(name, topicActors) =>
+          topicActors.foreach(actor => actor ! Unsubscribe(self.path.name))
+//          topicActor != UNSUBSCRIBE
       })
     }
     )
