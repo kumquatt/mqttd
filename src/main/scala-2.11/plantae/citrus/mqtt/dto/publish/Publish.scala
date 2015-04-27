@@ -143,7 +143,7 @@ object PUBRELDecoder {
   def decode(bytes: Array[Byte]): PUBREL = {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
-    if (typeAndFlag != (BYTE(0x06) << 4 | BYTE(0x02))) {
+    if (typeAndFlag != ((BYTE(0x06) << 4 & BYTE(0xF0.toByte)) | (BYTE(0x02) & BYTE(0x0F.toByte)))) {
       println("unexpeceted type : " + typeAndFlag)
       throw new Error
     }
@@ -161,7 +161,7 @@ object PUBCOMBDecoder {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
-    if (typeAndFlag != (BYTE(0x07) << 4))
+    if (typeAndFlag != (BYTE(0x07) << 4 & BYTE(0xF0.toByte)))
       throw new Error
     val packetId = Decoder.decodeINT(stream)
     if (remainingLength.value != packetId.usedByte)

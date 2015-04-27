@@ -29,9 +29,7 @@ class Storage {
     })
 
   def nextMessage: Option[PUBLISH] = {
-
     if (workQueue.size > 0) {
-      println("readyQueue size " + readyQueue.size + "  workQueue : " + workQueue.size);
       None
     } else readyQueue match {
       case head :: tail =>
@@ -39,7 +37,7 @@ class Storage {
         val publish = PUBLISH(false, INT(head.qos), head.retain, STRING(head.topic), Some(INT(nextPacketId)), PUBLISHPAYLOAD(head.payload))
         workQueue = workQueue :+ publish
         Some(publish)
-      case List() => println("readyQueue size " + readyQueue.size + "  workQueue : " + workQueue.size); None
+      case List() => None
     }
 
   }

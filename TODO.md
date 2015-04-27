@@ -10,7 +10,7 @@
 
 ~~6. Session & Socket Actor refactoring~~
 
-7. Topic 해야할것 찾아봅시다.
+~~7. Topic 해야할것 찾아봅시다.~~
 
 8. Topic retain 같은 것들 남아있음
 
@@ -21,6 +21,12 @@
 11. performance test
 
 12. Topic Tree 를 어떻게 해야 HA 스럽게 만들 것인가??? -- 모든 Node에 복사하게 만드는 방법을 찾아야할 듯
+
+13. session & topic clustering 방식
+
+14. session, topic 들에 대해서 누가 watch걸고 있을 것인가?
+
+15. 확인해볼것 http://emqtt.io/
 
 
 
