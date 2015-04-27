@@ -7,7 +7,7 @@ import akka.actor._
 import akka.pattern.ask
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.directory._
-import plantae.citrus.mqtt.actors.topic.{Unsubscribe, Subscribe, TopicOutMessage, TopicResponse}
+import plantae.citrus.mqtt.actors.topic.{Subscribe, TopicOutMessage, TopicResponse, Unsubscribe}
 import plantae.citrus.mqtt.dto._
 import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, DISCONNECT, ReturnCode}
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
@@ -64,30 +64,22 @@ class Session extends Actor with ActorLogging {
 
   def handleOutboundPublish(x: Outbound) = {
     x match {
-      case OutboundPublishDone(packetId, 0) => invokePublish
-      case OutboundPublishDone(packetId, 1) =>
-        storage.completeQos1(packetId)
+      case publishDone: OutboundPublishDone => publishDone.packetId match {
+        case Some(x) => storage.complete(x)
+        case None =>
+      }
         invokePublish
-      case OutboundPublishDone(packetId, 2) =>
-        storage.progress(packetId)
-//        qos match {
-//          case 0 => invokePublish
-//          case 1 => storage.completeQos1(packetId)
-//            invokePublish
-//          case 2 => storage.progress(packetId)
-//        }
-      case OutboundPubCompDone(packetId) =>
-        storage.completeQos2(packetId)
-        invokePublish
+      case anyOtherCase => unhandled(anyOtherCase)
     }
   }
 
-  def handleTopicPacket(response: TopicResponse, sender: ActorRef) {
+  def handleTopicPacket(response: TopicResponse, topic: ActorRef) {
     response match {
       case message: TopicOutMessage =>
         storage.persist(message.payload, message.qos, message.retain, message.topic)
         invokePublish
-      case anyOtherTopicMessage => log.error(" unexpected topic message {}", anyOtherTopicMessage)
+      case anyOtherTopicMessage =>
+        log.error(" unexpected topic message {}", anyOtherTopicMessage)
     }
   }
 
@@ -116,7 +108,6 @@ class Session extends Actor with ActorLogging {
         case None =>
       }
     }
-
   }
 
   private def resetTimer = connectionStatus match {
@@ -135,8 +126,10 @@ class Session extends Actor with ActorLogging {
         connectionStatus = Some(ConnectionStatus(mqtt.will, mqtt.keepAlive.value, self, context, sender))
         bridge ! MQTTOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
         invokePublish
+
       case PINGREQ =>
         bridge ! MQTTOutboundPacket(PINGRESP)
+
       case mqtt: PUBLISH => {
         context.actorOf(Props(classOf[InboundPublisher], sender, mqtt.qos.value), {
           mqtt.qos.value match {
@@ -146,23 +139,25 @@ class Session extends Actor with ActorLogging {
           }
         }) ! mqtt
       }
+
       case mqtt: PUBREL =>
         context.child(inboundActorName(mqtt.packetId)) match {
           case Some(x) => x ! mqtt
           case None => log.error("can't find publish inbound actor {}", inboundActorName(mqtt.packetId))
         }
+
       case mqtt: PUBREC =>
         context.child(outboundActorName(mqtt.packetId)) match {
           case Some(x) => x ! mqtt
           case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId))
-
         }
+
       case mqtt: PUBACK =>
         context.child(outboundActorName(mqtt.packetId)) match {
           case Some(x) => x ! mqtt
           case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId))
-
         }
+
       case mqtt: PUBCOMB =>
         context.child(outboundActorName(mqtt.packetId)) match {
           case Some(x) => x ! mqtt
@@ -173,11 +168,9 @@ class Session extends Actor with ActorLogging {
         val currentConnectionStatus = connectionStatus
         connectionStatus = None
         currentConnectionStatus match {
-          case Some(x) =>
-            x.destory
+          case Some(x) => x.destory
           case None =>
         }
-
       }
 
       case subscribe: SUBSCRIBE =>
@@ -198,7 +191,7 @@ class Session extends Actor with ActorLogging {
       Await.result(ActorContainer.directoryProxy ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
         case DirectoryResp2(topicName, options) =>
           options.foreach(actor => actor ! Subscribe(self.path.name))
-//          option ! Subscribe(self.path.name)
+          //          option ! Subscribe(self.path.name)
           BYTE(0x00)
       }
     )
@@ -207,11 +200,13 @@ class Session extends Actor with ActorLogging {
 
   def unsubscribeTopics(topics: List[STRING]) = {
     topics.foreach(x => {
-      ActorContainer.invokeCallback(DirectoryReq(x.value, TypeTopic), context, {
-        case DirectoryResp2(name, topicActors) =>
-          topicActors.foreach(actor => actor ! Unsubscribe(self.path.name))
-//          topicActor != UNSUBSCRIBE
-      })
+      ActorContainer.invokeCallback(DirectoryReq(x.value, TypeTopic), context, Props(new Actor {
+        def receive = {
+          case DirectoryResp2(name, topicActors) =>
+            topicActors.foreach(actor => actor ! Unsubscribe(self.path.name))
+          //          topicActor != UNSUBSCRIBE
+        }
+      }))
     }
     )
 
@@ -220,21 +215,28 @@ class Session extends Actor with ActorLogging {
   def invokePublish = {
     val session = self
     connectionStatus match {
-      case Some(tcp) =>
+      case Some(client) =>
         storage.nextMessage match {
           case Some(x) =>
-
             val actorName = PublishConstant.outboundPrefix + (x.packetId match {
               case Some(y) => y.value
               case None => UUID.randomUUID().toString
             })
+
             context.child(actorName) match {
-              case Some(actor) => actor ! x
-              case None => context.actorOf(Props(classOf[OutboundPublisher], tcp.socket, session), actorName) ! x
+              case Some(actor) =>
+                actor ! x
+                log.debug("using exist actor publish  complete {} ", actorName)
+
+              case None =>
+                context.actorOf(Props(classOf[OutboundPublisher], client.socket, session), actorName) ! x
+                log.debug("create new actor publish  complete {} ", actorName)
+
             }
-          case None => log.debug("invoke publish but no message")
+
+          case None => log.debug("invoke publish but no message : child actor count - {} ", context.children.foldLeft(List[String]())((x, ac) => x :+ ac.path.name))
         }
-      case None => log.debug("invoke publish but no connection")
+      case None => log.debug("invoke publish but no connection : child actor count - {}", context.children.foldLeft(List[String]())((x, ac) => x :+ ac.path.name))
     }
   }
 

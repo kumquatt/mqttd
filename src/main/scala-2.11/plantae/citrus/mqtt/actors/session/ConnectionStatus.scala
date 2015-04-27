@@ -2,7 +2,7 @@ package plantae.citrus.mqtt.actors.session
 
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ActorContext, ActorRef, Cancellable}
+import akka.actor._
 import plantae.citrus.mqtt.actors.ActorContainer
 import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectoryResp, TypeTopic}
 import plantae.citrus.mqtt.actors.topic.TopicInMessage
@@ -36,15 +36,17 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
   def handleWill = {
     will match {
       case Some(x) =>
-        ActorContainer.invokeCallback(DirectoryReq(x.topic.value, TypeTopic), sessionContext, {
-          case DirectoryResp(name, actor) =>
-            val topicInMessage = TopicInMessage(x.message.value.getBytes, (x.qos >> 3 & BYTE(0x03.toByte)).value.toShort, x.retain, x.qos.value.toShort match {
-              case 0 => None
-              case qos if (qos > 0) => Some(1)
-            })
-            actor.tell(topicInMessage, ActorRef.noSender)
+        ActorContainer.invokeCallback(DirectoryReq(x.topic.value, TypeTopic), sessionContext, Props(new Actor {
+          def receive = {
+            case DirectoryResp(name, actor) =>
+              val topicInMessage = TopicInMessage(x.message.value.getBytes, (x.qos >> 3 & BYTE(0x03.toByte)).value.toShort, x.retain, x.qos.value.toShort match {
+                case 0 => None
+                case qos if (qos > 0) => Some(1)
+              })
+              actor.tell(topicInMessage, ActorRef.noSender)
+          }
         }
-        )
+        ))
       case None =>
     }
   }

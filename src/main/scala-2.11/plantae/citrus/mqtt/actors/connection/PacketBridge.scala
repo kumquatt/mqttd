@@ -40,13 +40,15 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
       PacketDecoder.decode(data.toArray[Byte]) match {
         case connect: CONNECT => {
           val get = Get(connect.clientId.value, connect.cleanSession)
-          context.actorOf(Props(classOf[SessionChecker], this)).tell(get,
+          val sessionChecker = context.actorOf(Props(classOf[SessionChecker], this))
+          sessionChecker.tell(get,
             context.actorOf(Props(new Actor {
               def receive = {
                 case clientSession: ActorRef =>
                   session = clientSession
                   session.tell(MQTTInboundPacket(connect), bridge)
                   context.stop(self)
+                  context.stop(sessionChecker)
               }
             })))
         }
@@ -65,52 +67,28 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
       session ! ClientCloseConnection
       context.stop(self)
     }
-
-  }
-
-  def doSession(connect: CONNECT) = {
-    context.actorOf(Props(classOf[SessionChecker], this))
-      .tell(Get(connect.clientId.value, connect.cleanSession),
-      context.actorOf(Props(new Actor {
-        def receive = {
-          case clientSession: ActorRef =>
-            session = clientSession
-            session.forward(MQTTInboundPacket(connect))
-            context.stop(self)
-        }
-      })))
   }
 
   case class Get(clientId: String, cleanSession: Boolean)
 
   class SessionChecker() extends Actor {
 
-    override def preStart = {
-      super.preStart
-      log.debug("create session checker {}", self.path.name)
-    }
-
-    override def postStop = {
-      super.postStop
-      log.debug("remove session checker {}", self.path.name)
-    }
-
-
     def receive = {
       case Get(clientId, cleanSession) => {
         val doSessionActor: ActorRef = sender()
         ActorContainer.invokeCallback(DirectoryReq(clientId, TypeSession),
-        context, {
-          case DirectoryResp(name, session) => {
-            log.info("load success DirectoryService")
-            if (cleanSession) {
-              Await.result(session ? SessionReset, Duration.Inf)
+          context, Props(new Actor with ActorLogging {
+            def receive = {
+              case DirectoryResp(name, session) => {
+                if (cleanSession) {
+                  Await.result(session ? SessionReset, Duration.Inf)
+                }
+                log.info("clientSession[{}] is passed to [{}]", session.path.name, doSessionActor.path.name)
+                doSessionActor ! session
+              }
             }
-            log.info("clientSession[{}] is passed to [{}]", session.path.name, doSessionActor.path.name)
-            doSessionActor ! session
-          }
-        })
-
+          })
+        )
       }
     }
   }

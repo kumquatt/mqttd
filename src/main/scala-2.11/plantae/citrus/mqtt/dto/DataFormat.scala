@@ -1,7 +1,7 @@
 package plantae.citrus.mqtt.dto
 
 import java.util.concurrent.atomic.AtomicInteger
-
+import java.lang.{Short => JavaShort, Integer => JavaInt}
 trait DataFormat {
   val encode: List[Byte]
 
@@ -54,13 +54,6 @@ case class BYTE(value: Byte) extends DataFormat {
 }
 
 case class INT(value: Short) extends DataFormat {
-  def this(value: Int) = {
-    this({
-      if (value < 0xFFFF) value.toShort
-      else throw new Error
-    })
-  }
-
   def mostSignificantByte: BYTE = BYTE(((value & 0xFF00) >> 8).toByte)
 
   def leastSignificantByte: BYTE = BYTE((value & 0x00FF).toByte)
@@ -68,7 +61,6 @@ case class INT(value: Short) extends DataFormat {
   def this(msb: BYTE, lsb: BYTE) {
     this(((msb.value) << 8 & 0xFF00 | lsb.value).toShort)
   }
-
 
   override val encode: List[Byte] = {
     List(mostSignificantByte.value, leastSignificantByte.value)
@@ -89,6 +81,9 @@ case class INT(value: Short) extends DataFormat {
   def ==(x: Int): Boolean = value == x
 
   def toBYTE: BYTE = BYTE(value.toByte)
+  def toHexa = {
+    JavaInt.toHexString(value)
+  }
 }
 
 case class REMAININGLENGTH(value: Int) extends DataFormat {
@@ -175,7 +170,7 @@ object Decoder {
   }
 
   def decodeINT(stream: ByteStream): INT = {
-    val data = INT((((stream.rest(0) << 8 & 0xFF00)) | (stream.rest(1) &0x00FF)).toShort)
+    val data = INT(((stream.rest(0) << 8 & 0xFF00) | (stream.rest(1) & 0x00FF)).toShort)
     stream.proceed(data)
     data
   }

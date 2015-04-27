@@ -5,9 +5,9 @@ import org.scalatest.FunSuite
 import org.scalatest.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
-class DataFormatTest extends FunSuite{
+class DataFormatTest extends FunSuite {
 
-  test("BYTE test"){
+  test("BYTE test") {
     assert(BYTE(0x80.toByte).isMostSignificantBitOn === true)
     assert(BYTE(0x70.toByte).isMostSignificantBitOn === false)
     assert(BYTE(0x80.toByte).isMostSignificantBitOn === true)
@@ -17,11 +17,17 @@ class DataFormatTest extends FunSuite{
     assert(BYTE(3).isMostSignificantBitOn === false)
     assert((BYTE(0x1) << 3) == BYTE(0x8))
     assert(BYTE(0x0).toBoolean == false)
-    assert(Range(0x1,0xFF).foldLeft(true)((a,b)=> {a && BYTE(b.toByte).toBoolean}) == true)
+    assert(Range(0x1, 0xFF).foldLeft(true)((a, b) => {
+      a && BYTE(b.toByte).toBoolean
+    }) == true)
 
   }
 
-  test("INT test"){
+  test("INT test") {
+    Range(-32768,32767).foreach(each => each == Decoder.decodeINT(Decoder.ByteStream(INT(each.toShort).encode.toArray)).value)
+    println(Decoder.decodeINT(Decoder.ByteStream(INT(128).encode.toArray)))
+    println(INT(-128).encode)
+
     assert(INT(Short.MaxValue).leastSignificantByte.hexa === "0xFF")
     assert(INT(Short.MaxValue).mostSignificantByte.hexa === "0x7F")
 
@@ -30,7 +36,7 @@ class DataFormatTest extends FunSuite{
 
   }
 
-  test("STRING test"){
+  test("STRING test") {
 
     assert(STRING("client_id").encode === List(0, 9, 99, 108, 105, 101, 110, 116, 95, 105, 100))
     assert("client_id".getBytes === Array(99, 108, 105, 101, 110, 116, 95, 105, 100))
