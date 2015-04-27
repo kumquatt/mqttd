@@ -1,7 +1,6 @@
 package plantae.citrus.mqtt.actors.topic
 
 import akka.actor._
-import plantae.citrus.exercise.DiskTreeNode
 
 import scala.collection.mutable.Map
 import scala.util.Random
@@ -90,5 +89,114 @@ class Topic(name: String) extends Actor with ActorLogging {
   def printEverySubscriber = {
     log.info("{}'s subscriber ", name)
     subscriberMap.foreach(s => log.info("{},", s._1))
+  }
+}
+
+case class DiskTreeNode[A](name: String, fullPath: String, children: Map[String, DiskTreeNode[A]] = Map[String, DiskTreeNode[A]]()){
+  var topic: Option[A] = None
+
+  def pathToList(path: String) : List[String] = {
+    path.split("/").toList
+  }
+
+  def addNode(path: String, topic: A): Boolean = {
+    addNode(pathToList(path), path, topic)
+  }
+
+  def addNode(paths: List[String], path: String, topic: A): Boolean = {
+    paths match {
+      case Nil => this.topic = Some(topic)
+      case _ => {
+        children.get(paths.head) match {
+          case Some(node: DiskTreeNode[A]) => {
+            node.addNode(paths.tail, path, topic)
+          }
+          case None => {
+            val node = new DiskTreeNode[A](paths.head, fullPath +"/" +paths.head)
+            node.addNode(paths.tail, path, topic)
+            children.+=((paths.head, node))
+          }
+        }
+      }
+    }
+
+    true
+  }
+
+  def removeNode(path: String): Boolean = {
+    removeNode(pathToList(path))
+  }
+
+  def removeNode(paths: List[String]): Boolean = {
+    if(paths.size == 1){
+      children.-(paths.head)
+    } else if(paths.size > 1) {
+      children.get(paths.head) match {
+        case Some(node: DiskTreeNode[A]) => {
+          node.removeNode(paths.tail)
+        }
+        case None =>
+      }
+    }
+
+    true
+  }
+
+  def getNodes(path: String): List[A] = {
+    getNodes(pathToList(path))
+  }
+
+  def getNodes(paths: List[String]) : List[A] = {
+    paths match {
+      case Nil => List()
+      case x :: Nil => {
+        x match {
+          case "*" => getEveryNodes()
+          case "+" => {
+            children.filter(x => x._2.topic.isDefined).map(y => y._2.topic match {
+              case Some(t) => t
+            }).toList
+          }
+          case _ => {
+            children.get(x) match {
+              case Some(node:DiskTreeNode[A]) => {
+                node.topic match {
+                  case Some(t) => List(t)
+                  case None => List()
+                }
+
+              }
+              case None => List()
+            }
+          }
+        }
+      }
+      case x :: others => {
+        x match {
+          case "+" => {
+            children.map(x => {
+              x._2.getNodes(others)
+            }).flatten.toList
+          }
+          case _ => {
+            children.get(x) match {
+              case Some(node: DiskTreeNode[A]) => node.getNodes(others)
+              case None => List()
+            }
+          }
+        }
+      }
+    }
+  }
+
+  def getEveryNodes(): List[A] = {
+    val topics = children.map(x => {
+      x._2.getEveryNodes()
+    }).flatten.toList
+
+    topic match {
+      case Some(x) => x :: topics
+      case None => topics
+    }
   }
 }
