@@ -28,7 +28,7 @@ object PublishTest extends App {
       client1.subscribe(Array("test"))
 
       Range(1, 1000).foreach(count =>
-        client1.publish("test", (count + "test publish").getBytes(), 1, true)
+        client1.publish("test", (count + "test publish").getBytes(), 2, true)
       )
       println("client1 1 => connection complete")
     }

@@ -43,16 +43,6 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
           val sessionChecker = context.actorOf(Props(classOf[SessionChecker], this))
           sessionChecker.tell(get,
             context.actorOf(Props(new Actor {
-              override def preStart = {
-                super.preStart
-                log.debug("create return proxy checker {}", self.path.name)
-              }
-
-              override def postStop = {
-                super.postStop
-                log.debug("remove return proxy checker {}", self.path.name)
-              }
-
               def receive = {
                 case clientSession: ActorRef =>
                   session = clientSession
@@ -62,7 +52,6 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
               }
             })))
         }
-          context.children.foreach(child => println(child.path.name))
         case mqttPacket: PUBLISH => session ! MQTTInboundPacket(mqttPacket)
         case mqttPacket: PUBACK => session ! MQTTInboundPacket(mqttPacket)
         case mqttPacket: PUBREC => session ! MQTTInboundPacket(mqttPacket)
@@ -84,25 +73,13 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
 
   class SessionChecker() extends Actor {
 
-    override def preStart = {
-      super.preStart
-      log.debug("create session checker {}", self.path.name)
-    }
-
-    override def postStop = {
-      super.postStop
-      log.debug("remove session checker {}", self.path.name)
-    }
-
-
     def receive = {
       case Get(clientId, cleanSession) => {
         val doSessionActor: ActorRef = sender()
         ActorContainer.invokeCallback(DirectoryReq(clientId, TypeSession),
-          context, Props(new Actor {
+          context, Props(new Actor with ActorLogging {
             def receive = {
               case DirectoryResp(name, session) => {
-                log.info("load success DirectoryService")
                 if (cleanSession) {
                   Await.result(session ? SessionReset, Duration.Inf)
                 }
