@@ -16,7 +16,7 @@ case class Unsubscribe(clientId: String) extends TopicRequest
 
 case object ClearList extends TopicRequest
 
-case class TopicInMessage(payload: Array[Byte], qos: Short, retain: Boolean, packetId: Option[Int]) extends TopicRequest
+case class TopicInMessage(payload: Array[Byte], qos: Short, retain: Boolean, packetId: Option[Short]) extends TopicRequest
 
 case object TopicInMessageAck extends TopicResponse
 
@@ -30,7 +30,6 @@ class TopicRoot extends Actor with ActorLogging {
 
   override def receive = {
     case topicName: String => {
-      log.info("Topic root {}", topicName)
       root.getNodes(topicName) match {
         case Nil => {
           log.debug("new topic is created[{}]", topicName)
