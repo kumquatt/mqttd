@@ -1,6 +1,6 @@
 package plantae.citrus.mqtt.actors.topic
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor._
 import plantae.citrus.exercise.DiskTreeNode
 
 import scala.collection.mutable.Map
@@ -34,7 +34,7 @@ class TopicRoot extends Actor with ActorLogging {
       root.getNodes(topicName) match {
         case Nil => {
           log.debug("new topic is created[{}]", topicName)
-          val topic = context.actorOf(Props[Topic], Random.alphanumeric.take(128).mkString)
+          val topic = context.actorOf(Props(classOf[Topic], topicName), Random.alphanumeric.take(128).mkString)
           root.addNode(topicName, topic)
           sender ! List(topic)
         }
@@ -50,19 +50,23 @@ class TopicRoot extends Actor with ActorLogging {
   }
 }
 
-class Topic extends Actor with ActorLogging {
+class Topic(name: String) extends Actor with ActorLogging {
 
   val subscriberMap: Map[String, ActorRef] = Map()
 
   def receive = {
+//    case Terminated(a) => {
+//
+//    }
     case Subscribe(clientId) => {
-      log.info("Subscribe client({}) topic({})", clientId, self.path.name)
+      log.info("Subscribe client({}) topic({})", clientId, name)
       subscriberMap.+=((clientId, sender))
+//      context.watch(sender())
       printEverySubscriber
     }
 
     case Unsubscribe(clientId) => {
-      log.debug("Unsubscribe client({}) topic({})", clientId, self.path.name)
+      log.debug("Unsubscribe client({}) topic({})", clientId, name)
       subscriberMap.-(clientId)
       printEverySubscriber
     }
@@ -77,14 +81,14 @@ class Topic extends Actor with ActorLogging {
       log.debug("qos : {} , retain : {} , payload : {} , sender {}", qos, retain, new String(payload), sender)
       sender ! TopicInMessageAck
       subscriberMap.values.foreach(
-        (actor) => actor ! TopicOutMessage(payload, qos, retain, self.path.name)
+        (actor) => actor ! TopicOutMessage(payload, qos, retain, name)
       )
     }
     case TopicOutMessageAck =>
   }
 
   def printEverySubscriber = {
-    log.info("{}'s subscriber ", self.path.name)
+    log.info("{}'s subscriber ", name)
     subscriberMap.foreach(s => log.info("{},", s._1))
   }
 }

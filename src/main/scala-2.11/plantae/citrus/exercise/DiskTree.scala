@@ -91,37 +91,43 @@ case class DiskTreeNode[A](name: String, fullPath: String, children: Map[String,
 
   def getNodes(paths: List[String]) : List[A] = {
     paths match {
-      case "*" :: Nil => getEveryNodes()
-      case "+" :: Nil => {
-
-        children.filter(x => x._2.topic.isDefined).map(y => y._2.topic match {
-          case Some(y:A) => y
-        }).toList
-      }
-      case "+" :: others => {
-        children.map(x => {
-          x._2.getNodes(others)
-        }).flatten.toList
-      }
       case x :: Nil => {
-        children.get(x) match {
-          case Some(node:DiskTreeNode[A]) => {
-            node.topic match {
-              case Some(t) => List(t)
+        x match {
+          case "*" => getEveryNodes()
+          case "+" => {
+            children.filter(x => x._2.topic.isDefined).map(y => y._2.topic match {
+              case Some(y:A) => y
+            }).toList
+          }
+          case _ => {
+            children.get(x) match {
+              case Some(node:DiskTreeNode[A]) => {
+                node.topic match {
+                  case Some(t) => List(t)
+                  case None => List()
+                }
+
+              }
               case None => List()
             }
-
           }
-          case None => List()
         }
       }
       case x :: others => {
-        children.get(x) match {
-          case Some(node:DiskTreeNode[A]) => node.getNodes(others)
-          case None => List()
+        x match {
+          case "+" => {
+            children.map(x => {
+              x._2.getNodes(others)
+            }).flatten.toList
+          }
+          case _ => {
+            children.get(x) match {
+              case Some(node: DiskTreeNode[A]) => node.getNodes(others)
+              case None => List()
+            }
+          }
         }
       }
-
     }
   }
 
