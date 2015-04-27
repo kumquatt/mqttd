@@ -2,7 +2,7 @@ package plantae.citrus.mqtt.actors.session
 
 import akka.actor._
 import plantae.citrus.mqtt.actors.ActorContainer
-import plantae.citrus.mqtt.actors.directory.{DirectoryResp2, DirectoryReq, DirectoryResp, TypeTopic}
+import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectoryResp2, TypeTopic}
 import plantae.citrus.mqtt.actors.topic.{TopicInMessage, TopicInMessageAck}
 import plantae.citrus.mqtt.dto.INT
 import plantae.citrus.mqtt.dto.publish._
@@ -63,7 +63,7 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
       client ! MQTTOutboundPacket(publish)
       publish.qos.value match {
         case 0 =>
-          session ! OutboundPublishDone(0,0)
+          session ! OutboundPublishDone(0, 0)
           stop(FSM.Shutdown)
         case 1 => goto(WaitPubAck)
         case 2 => goto(WaitPubRec)
@@ -118,19 +118,21 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
 
   when(WaitPublish) {
     case Event(publish: PUBLISH, waitPublish) =>
-      ActorContainer.invokeCallback(DirectoryReq(publish.topic.value, TypeTopic), context, {
-        case DirectoryResp2(name, actors) =>
-          actors.foreach(actor =>
-            actor.tell(
-              TopicInMessage(publish.data.value, publish.qos.value, publish.retain,
-                publish.packetId match {
-                  case Some(x) => Some(x.value)
-                  case None => None
-                }
-              ), publishActor)
-          )
-
+      ActorContainer.invokeCallback(DirectoryReq(publish.topic.value, TypeTopic), context, Props(new Actor {
+        def receive = {
+          case DirectoryResp2(name, actors) =>
+            actors.foreach(actor =>
+              actor.tell(
+                TopicInMessage(publish.data.value, publish.qos.value, publish.retain,
+                  publish.packetId match {
+                    case Some(x) => Some(x.value)
+                    case None => None
+                  }
+                ), publishActor)
+            )
+        }
       }
+      )
       )
 
       publish.qos.value match {

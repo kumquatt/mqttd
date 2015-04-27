@@ -21,10 +21,8 @@ object ActorContainer {
   }
 
 
-  def invokeCallback(directoryReq: DirectoryReq, senderContext: ActorContext, callback: PartialFunction[Any, Unit]) = {
-    directoryProxy.tell(directoryReq, senderContext.actorOf(Props(new Actor {
-      override def receive = callback
-    })))
+  def invokeCallback(directoryReq: DirectoryReq, senderContext: ActorContext, props: Props) = {
+    directoryProxy.tell(directoryReq, senderContext.actorOf(props))
   }
 }
 

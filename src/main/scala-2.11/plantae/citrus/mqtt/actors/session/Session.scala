@@ -202,11 +202,13 @@ class Session extends Actor with ActorLogging {
 
   def unsubscribeTopics(topics: List[STRING]) = {
     topics.foreach(x => {
-      ActorContainer.invokeCallback(DirectoryReq(x.value, TypeTopic), context, {
-        case DirectoryResp2(name, topicActors) =>
-          topicActors.foreach(actor => actor ! Unsubscribe(self.path.name))
-//          topicActor != UNSUBSCRIBE
-      })
+      ActorContainer.invokeCallback(DirectoryReq(x.value, TypeTopic), context, Props(new Actor {
+        def receive = {
+          case DirectoryResp2(name, topicActors) =>
+            topicActors.foreach(actor => actor ! Unsubscribe(self.path.name))
+          //          topicActor != UNSUBSCRIBE
+        }
+      }))
     }
     )
 
