@@ -30,7 +30,7 @@ class Storage {
 
   def nextMessage: Option[PUBLISH] = {
 
-    if (workQueue.size > 500) {
+    if (workQueue.size > 0) {
       println("readyQueue size " + readyQueue.size + "  workQueue : " + workQueue.size);
       None
     } else readyQueue match {
