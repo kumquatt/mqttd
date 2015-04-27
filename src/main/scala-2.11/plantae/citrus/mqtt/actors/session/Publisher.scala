@@ -58,9 +58,10 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
 
   when(WaitPublish) {
     case Event(publish: PUBLISH, waitPublish) =>
-      log.info(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
+      log.info(" actor-name : {} , status : {}, qos {}", self.path.name, "WaitPublish", publish.qos.value )
 
       client ! MQTTOutboundPacket(publish)
+
       publish.qos.value match {
         case 0 =>
           session ! OutboundPublishDone(None)
