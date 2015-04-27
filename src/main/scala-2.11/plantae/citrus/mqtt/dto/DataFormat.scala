@@ -175,7 +175,7 @@ object Decoder {
   }
 
   def decodeINT(stream: ByteStream): INT = {
-    val data = INT(((stream.rest(0) << 8 & 0xFF00) + stream.rest(1)).toShort)
+    val data = INT((((stream.rest(0) << 8 & 0xFF00)) | (stream.rest(1) &0x00FF)).toShort)
     stream.proceed(data)
     data
   }

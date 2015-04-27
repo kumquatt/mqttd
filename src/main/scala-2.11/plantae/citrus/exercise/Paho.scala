@@ -87,6 +87,13 @@ object Paho extends App {
       println("publish complete qos 2")
 
       println("sleep 10 seconds")
+
+      Range(1, 1000).foreach(x => {
+
+        client1.publish("test", "count(%d) th ... message".format(x.toInt).getBytes, 2, false)
+        Thread.sleep(1000)
+      })
+
       Range(1, 10).foreach(x => {
         Thread.sleep(1000)
         println(x + " second passed")
@@ -99,55 +106,55 @@ object Paho extends App {
 
           override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
             println("client2 topic:" + s + "\tmessage:" + new String(mqttMessage.getPayload))
-          }
+}
 
-          override def connectionLost(throwable: Throwable): Unit = {}
-        }
-      )
-      option.setKeepAliveInterval(10)
-      option.setCleanSession(false)
-      client2.connect(option)
+override def connectionLost(throwable: Throwable): Unit = {}
+}
+)
+option.setKeepAliveInterval(10)
+option.setCleanSession(false)
+client2.connect(option)
 
-      println("client2 connection complete")
+println("client2 connection complete")
 
-      //
-      //      client1.publish("test", "qos 2 message".getBytes, 2, false)
-      //      println("publish complete qos 2")
-      //
-      //      client1.publish("test", "qos 0 message".getBytes, 0, false)
-      //      println("publish complete qos 0")
-      //
-      //      client1.publish("test", "qos 0 message".getBytes, 0, false)
-      //      println("publish complete qos 0")
+//
+//      client1.publish("test", "qos 2 message".getBytes, 2, false)
+//      println("publish complete qos 2")
+//
+//      client1.publish("test", "qos 0 message".getBytes, 0, false)
+//      println("publish complete qos 0")
+//
+//      client1.publish("test", "qos 0 message".getBytes, 0, false)
+//      println("publish complete qos 0")
 
 
-    }
-  }.start()
+}
+}.start()
 
-  //  Thread.sleep(1000)
-  //  new Thread() {
-  //    override def run: Unit = {
-  //      var client = new MqttClient("tcp://localhost:8888", "customer_2")
-  //
-  //      client.connect()
-  //      client.subscribe("test")
-  //      client.subscribe("test1")
-  //
-  //    }
-  //  }.start()
-  //
-  //  Thread.sleep(1000)
-  //  new Thread() {
-  //    override def run: Unit = {
-  //      var client = new MqttClient("tcp://localhost:8888", "customer_3")
-  //
-  //      client.connect()
-  //      client.subscribe("test")
-  //      client.subscribe("test1")
-  //
-  //    }
-  //  }.start()
-  //
+//  Thread.sleep(1000)
+//  new Thread() {
+//    override def run: Unit = {
+//      var client = new MqttClient("tcp://localhost:8888", "customer_2")
+//
+//      client.connect()
+//      client.subscribe("test")
+//      client.subscribe("test1")
+//
+//    }
+//  }.start()
+//
+//  Thread.sleep(1000)
+//  new Thread() {
+//    override def run: Unit = {
+//      var client = new MqttClient("tcp://localhost:8888", "customer_3")
+//
+//      client.connect()
+//      client.subscribe("test")
+//      client.subscribe("test1")
+//
+//    }
+//  }.start()
+//
   //  Thread.sleep(1000)
   //  new Thread() {
   //    override def run: Unit = {

@@ -64,13 +64,18 @@ class Session extends Actor with ActorLogging {
 
   def handleOutboundPublish(x: Outbound) = {
     x match {
-      case OutboundPublishDone(packetId, qos) =>
-        qos match {
-          case 0 => invokePublish
-          case 1 => storage.completeQos1(packetId)
-            invokePublish
-          case 2 => storage.progress(packetId)
-        }
+      case OutboundPublishDone(packetId, 0) => invokePublish
+      case OutboundPublishDone(packetId, 1) =>
+        storage.completeQos1(packetId)
+        invokePublish
+      case OutboundPublishDone(packetId, 2) =>
+        storage.progress(packetId)
+//        qos match {
+//          case 0 => invokePublish
+//          case 1 => storage.completeQos1(packetId)
+//            invokePublish
+//          case 2 => storage.progress(packetId)
+//        }
       case OutboundPubCompDone(packetId) =>
         storage.completeQos2(packetId)
         invokePublish
