@@ -51,7 +51,7 @@ class Session extends Actor with ActorLogging {
   implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
 
   var connectionStatus: Option[ConnectionStatus] = None
-  val storage = new Storage()
+  val storage = Storage(self.path.name)
 
 
   override def receive: Receive = {

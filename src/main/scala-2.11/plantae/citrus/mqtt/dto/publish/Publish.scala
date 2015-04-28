@@ -41,7 +41,7 @@ case class PUBACK(packetId: INT) extends MESSAGE {
 
   override def payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
 
-  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x04) << 4, REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
+  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x40), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
   override def usedByte: Int = encode.length
 }
@@ -53,7 +53,7 @@ case class PUBREC(packetId: INT) extends MESSAGE {
 
   override def payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
 
-  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x05) << 4, REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
+  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x50), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
   override def usedByte: Int = encode.length
 }
@@ -64,7 +64,7 @@ case class PUBREL(packetId: INT) extends MESSAGE {
 
   override def payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
 
-  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x06) << 4 | BYTE(0x02), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
+  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x62), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
   override def usedByte: Int = encode.length
 }
@@ -75,7 +75,7 @@ case class PUBCOMB(packetId: INT) extends MESSAGE {
 
   override def payload: Payload = EMPTY_COMPONENT.EMPTY_PAYLOAD
 
-  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x07) << 4, REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
+  override def fixedHeader: FixedHeader = FixedHeader(BYTE(0x70), REMAININGLENGTH(variableHeader.usedByte + payload.usedByte))
 
   override def usedByte: Int = encode.length
 }
@@ -113,8 +113,7 @@ object PUBACKDecoder {
   def decode(bytes: Array[Byte]): PUBACK = {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
-    if (typeAndFlag != (BYTE(0x04) << 4))
-      throw new Error
+    if (typeAndFlag != BYTE(0x40)) throw new Error
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
     val packetId = Decoder.decodeINT(stream)
     if (remainingLength.value != packetId.usedByte)
@@ -128,8 +127,7 @@ object PUBRECDecoder {
   def decode(bytes: Array[Byte]): PUBREC = {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
-    if (typeAndFlag != (BYTE(0x05) << 4))
-      throw new Error
+    if (typeAndFlag != BYTE(0x50)) throw new Error
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
     val packetId = Decoder.decodeINT(stream)
     if (remainingLength.value != packetId.usedByte)
@@ -143,10 +141,7 @@ object PUBRELDecoder {
   def decode(bytes: Array[Byte]): PUBREL = {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
-    if (typeAndFlag != ((BYTE(0x06) << 4 & BYTE(0xF0.toByte)) | (BYTE(0x02) & BYTE(0x0F.toByte)))) {
-      println("unexpeceted type : " + typeAndFlag)
-      throw new Error
-    }
+    if (typeAndFlag != BYTE(0x62.toByte)) throw new Error
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
     val packetId = Decoder.decodeINT(stream)
     if (remainingLength.value != packetId.usedByte)
@@ -161,11 +156,9 @@ object PUBCOMBDecoder {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
-    if (typeAndFlag != (BYTE(0x07) << 4 & BYTE(0xF0.toByte)))
-      throw new Error
+    if (typeAndFlag != BYTE(0x70)) throw new Error
     val packetId = Decoder.decodeINT(stream)
-    if (remainingLength.value != packetId.usedByte)
-      throw new Error
+    if (remainingLength.value != packetId.usedByte) throw new Error
     PUBCOMB(packetId)
   }
 

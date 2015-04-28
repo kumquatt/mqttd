@@ -1,25 +1,72 @@
 package plantae.citrus.mqtt.actors.session
 
-import org.slf4j.{Logger, LoggerFactory}
+import java.io._
+import java.util.UUID
+
 import plantae.citrus.mqtt.dto.publish.PUBLISH
 import plantae.citrus.mqtt.dto.{INT, PUBLISHPAYLOAD, STRING}
 
-/**
- * Created by yinjae on 15. 4. 24..
- */
-class Storage {
+class Storage(sessionName: String) extends Serializable {
 
-  var count = 0
+  sealed trait Location
+
+  case object OnMemory extends Location
+
+  case class OnDisk(location: String) extends Location
 
   case class ReadyMessage(payload: Array[Byte], qos: Short, retain: Boolean, topic: String)
 
+  case class ChunkMessage(var location: Location, var readyMessages: List[ReadyMessage]) {
+    def serialize = {
+      new File("data/" + sessionName).mkdir()
+      val name = "data/" + sessionName + "/" + UUID.randomUUID().toString
+      val outputStreamer = new ObjectOutputStream(new FileOutputStream(name))
+      outputStreamer.writeObject(this)
+      outputStreamer.close()
+      location = OnDisk(name)
+      readyMessages = List()
+    }
+
+    def deserialize = {
+      location match {
+        case OnMemory =>
+        case OnDisk(path) =>
+          val inputStreamer = new ObjectInputStream(new FileInputStream(path))
+          readyMessages = inputStreamer.readObject().asInstanceOf[ChunkMessage].readyMessages
+          location = OnMemory
+          new File(path).delete()
+          inputStreamer.close()
+      }
+
+    }
+
+    def clear = {
+      location match {
+        case OnMemory => readyMessages = List()
+        case OnDisk(path) => new File(path).delete()
+      }
+    }
+  }
+
+
   private var packetIdGenerator: Short = 0
   private var topics: List[String] = List()
-  private var readyQueue: List[ReadyMessage] = List()
+  private var readyQueue: List[ChunkMessage] = List()
   private var workQueue: List[PUBLISH] = List()
 
   def persist(payload: Array[Byte], qos: Short, retain: Boolean, topic: String) = {
-    readyQueue = readyQueue :+ ReadyMessage(payload, qos, retain, topic)
+    readyQueue match {
+      case head :: rest => {
+        if (readyQueue.last.readyMessages.size >= 50) {
+          if (readyQueue.last != readyQueue.head) {
+            readyQueue.last.serialize
+          }
+          readyQueue = readyQueue :+ ChunkMessage(OnMemory, List(ReadyMessage(payload, qos, retain, topic)))
+        } else
+          readyQueue.last.readyMessages = (readyQueue.last.readyMessages :+ ReadyMessage(payload, qos, retain, topic))
+      }
+      case List() => readyQueue = readyQueue :+ ChunkMessage(OnMemory, List(ReadyMessage(payload, qos, retain, topic)))
+    }
   }
 
 
@@ -32,25 +79,40 @@ class Storage {
       case None =>
     }
 
+  def popFirstMessage: Option[ReadyMessage] = {
+    readyQueue match {
+      case headChunk :: tailChunk =>
+        headChunk.deserialize
+        headChunk.readyMessages match {
+          case headMessage :: tailMessage =>
+            headChunk.readyMessages = tailMessage
+            Some(headMessage)
+          case List() =>
+            readyQueue = tailChunk
+            popFirstMessage
+        }
+
+      case List() => None
+    }
+  }
+
   def nextMessage: Option[PUBLISH] = {
 
     if (workQueue.size > 0) {
       None
-    } else readyQueue match {
-      case head :: tail =>
-        readyQueue = tail
-        val publish = head.qos match {
+    } else popFirstMessage match {
+      case Some(message) =>
+        val publish = message.qos match {
           case x if (x > 0) =>
-            val publish = PUBLISH(false, INT(head.qos), head.retain, STRING(head.topic), Some(INT(nextPacketId)), PUBLISHPAYLOAD(head.payload))
+            val publish = PUBLISH(false, INT(message.qos), message.retain, STRING(message.topic), Some(INT(nextPacketId)), PUBLISHPAYLOAD(message.payload))
             workQueue = workQueue :+ publish
             publish
 
           case x if (x == 0) =>
-            PUBLISH(false, INT(head.qos), head.retain, STRING(head.topic), None, PUBLISHPAYLOAD(head.payload))
+            PUBLISH(false, INT(message.qos), message.retain, STRING(message.topic), None, PUBLISHPAYLOAD(message.payload))
         }
         Some(publish)
-
-      case List() => None
+      case None => None
     }
   }
 
@@ -60,6 +122,7 @@ class Storage {
 
   def clear = {
     topics = List()
+    readyQueue.foreach(chunk => chunk.clear)
     readyQueue = List()
     workQueue = List()
   }
@@ -71,7 +134,10 @@ class Storage {
       else (packetIdGenerator + 1).toShort
     }
     packetIdGenerator
-
   }
 
+}
+
+object Storage {
+  def apply(sessionName: String) = new Storage(sessionName)
 }
