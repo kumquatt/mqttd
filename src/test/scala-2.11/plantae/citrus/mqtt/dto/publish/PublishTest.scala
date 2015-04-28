@@ -54,7 +54,7 @@ class PublishTest extends FunSuite {
         false,
         STRING("test/topic"),
         None,
-        PUBLISHPAYLOAD(Array())
+        PUBLISHPAYLOAD("create publish packet - empty payload".getBytes)
       )
 
     assert(publish.dup == false)
@@ -62,7 +62,7 @@ class PublishTest extends FunSuite {
     assert(publish.retain == false)
     assert(publish.packetId === None)
     assert(publish.topic === STRING("test/topic"))
-    assert(publish.payload.encode === PUBLISHPAYLOAD(Array()).encode)
+    assert(new String(publish.payload.encode) === "create publish packet - empty payload")
   }
 
 

@@ -36,30 +36,30 @@ class TopicRoot extends Actor with ActorLogging {
           root.addNode(topicName, topic)
           sender ! List(topic)
         }
-        case topics : List[ActorRef] => sender ! topics
+        case topics: List[ActorRef] => sender ! topics
 
       }
-//      context.child(topicName) match {
-//        case Some(x) => sender ! x
-//        case None => log.debug("new topic is created [{}]", topicName)
-//          sender ! context.actorOf(Props[Topic], topicName)
-//      }
+      //      context.child(topicName) match {
+      //        case Some(x) => sender ! x
+      //        case None => log.debug("new topic is created [{}]", topicName)
+      //          sender ! context.actorOf(Props[Topic], topicName)
+      //      }
     }
   }
 }
 
 class Topic(name: String) extends Actor with ActorLogging {
-
+  var count: Int = 0
   val subscriberMap: Map[String, ActorRef] = Map()
 
   def receive = {
-//    case Terminated(a) => {
-//
-//    }
+    //    case Terminated(a) => {
+    //
+    //    }
     case Subscribe(clientId) => {
       log.info("Subscribe client({}) topic({})", clientId, name)
       subscriberMap.+=((clientId, sender))
-//      context.watch(sender())
+      //      context.watch(sender())
       printEverySubscriber
     }
 

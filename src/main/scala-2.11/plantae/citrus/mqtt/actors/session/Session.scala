@@ -64,10 +64,8 @@ class Session extends Actor with ActorLogging {
 
   def handleOutboundPublish(x: Outbound) = {
     x match {
-      case publishDone: OutboundPublishDone => publishDone.packetId match {
-        case Some(x) => storage.complete(x)
-        case None =>
-      }
+      case publishDone: OutboundPublishDone =>
+        storage.complete(publishDone.packetId)
         invokePublish
       case anyOtherCase => unhandled(anyOtherCase)
     }

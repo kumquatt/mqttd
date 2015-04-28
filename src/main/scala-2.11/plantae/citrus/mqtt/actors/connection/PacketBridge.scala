@@ -37,7 +37,6 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
     }
 
     case Received(data) => {
-      println(data.toArray[Byte])
       PacketDecoder.decode(data.toArray[Byte]) match {
         case connect: CONNECT => {
           val get = Get(connect.clientId.value, connect.cleanSession)
