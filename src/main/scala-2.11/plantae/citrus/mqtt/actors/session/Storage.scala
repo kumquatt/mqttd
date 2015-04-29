@@ -8,7 +8,7 @@ import plantae.citrus.mqtt.dto.publish.PUBLISH
 import plantae.citrus.mqtt.dto.{INT, PUBLISHPAYLOAD, STRING}
 
 class Storage(sessionName: String) extends Serializable {
-  val chunkSize = 50
+  val chunkSize = 10
 
   sealed trait Location
 
@@ -20,13 +20,13 @@ class Storage(sessionName: String) extends Serializable {
 
   case class ChunkMessage(var location: Location, var readyMessages: List[ReadyMessage]) {
     def serialize = {
-
-      new File("data/" + (new SimpleDateFormat("yyyy/MM/dd").format(new Date())) + "/" + sessionName).mkdir()
-      val name = "data/" + sessionName + "/" + UUID.randomUUID().toString
-      val outputStreamer = new ObjectOutputStream(new FileOutputStream(name))
+      val directory = new File("data/" + sessionName + "/" + (new SimpleDateFormat("yyyy/MM/dd").format(new Date())))
+      directory.mkdirs()
+      val path: String = directory.getAbsolutePath + "/" + UUID.randomUUID().toString
+      val outputStreamer = new ObjectOutputStream(new FileOutputStream(path))
       outputStreamer.writeObject(this)
       outputStreamer.close()
-      location = OnDisk(name)
+      location = OnDisk(path)
       readyMessages = List()
     }
 

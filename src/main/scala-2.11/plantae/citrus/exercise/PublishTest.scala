@@ -4,7 +4,7 @@ import org.eclipse.paho.client.mqttv3._
 
 
 object PublishTest extends App {
-//  val port = 1883
+  //  val port = 1883
   val port = 8888
   var option = new MqttConnectOptions()
   var client1 = new MqttClient("tcp://localhost:" + port, "customer1")
@@ -33,7 +33,7 @@ object PublishTest extends App {
 
 
   var option2 = new MqttConnectOptions()
-  var client2 = new MqttClient("tcp://localhost:"+ port, "customer2")
+  var client2 = new MqttClient("tcp://localhost:" + port, "customer2")
   client2.setCallback(
     new MqttCallback {
       var count = 0
@@ -58,7 +58,7 @@ object PublishTest extends App {
 
   Range(1, 10000).foreach(count => {
     println("publish " + count)
-    client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)" ).getBytes(), 2, false)
+    client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)").getBytes(), 0, false)
   }
   )
   Thread.sleep(10000)
