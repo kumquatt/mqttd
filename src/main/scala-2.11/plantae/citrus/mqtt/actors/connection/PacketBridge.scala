@@ -3,7 +3,7 @@ package plantae.citrus.mqtt.actors.connection
 import java.util.concurrent.TimeUnit
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
-import akka.io.Tcp.{PeerClosed, Received, Write}
+import akka.io.Tcp.{Event, PeerClosed, Received, Write}
 import akka.pattern.ask
 import akka.util.ByteString
 import plantae.citrus.mqtt.actors.ActorContainer
@@ -27,6 +27,8 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
   implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
+  case object Ack extends Event
+
   var session: ActorRef = null
   val bridge = self
 
@@ -37,7 +39,7 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
     }
 
     case Received(data) => {
-      PacketDecoder.decode(data.toArray[Byte]) match {
+      PacketDecoder.decode(data.toArray).foreach(_ match {
         case connect: CONNECT => {
           val get = Get(connect.clientId.value, connect.cleanSession)
           val sessionChecker = context.actorOf(Props(classOf[SessionChecker], this))
@@ -62,7 +64,9 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
         case PINGREQ => session ! MQTTInboundPacket(PINGREQ)
         case DISCONNECT => session ! MQTTInboundPacket(DISCONNECT)
       }
+      )
     }
+
     case PeerClosed => {
       session ! ClientCloseConnection
       context.stop(self)
@@ -83,7 +87,7 @@ class PacketBridge(socket: ActorRef) extends Actor with ActorLogging {
                 if (cleanSession) {
                   Await.result(session ? SessionReset, Duration.Inf)
                 }
-                log.info("clientSession[{}] is passed to [{}]", session.path.name, doSessionActor.path.name)
+                log.debug("clientSession[{}] is passed to [{}]", session.path.name, doSessionActor.path.name)
                 doSessionActor ! session
               }
             }

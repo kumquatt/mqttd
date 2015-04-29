@@ -98,7 +98,7 @@ case class REMAININGLENGTH(value: Int) extends DataFormat {
     }
   }
 
-  override val encode: List[Byte] = remainingLengthEncoding(value)
+  override val encode: List[Byte] = if(value == 0) List(0x00) else remainingLengthEncoding(value)
 
   override val usedByte: Int = encode.length
 }

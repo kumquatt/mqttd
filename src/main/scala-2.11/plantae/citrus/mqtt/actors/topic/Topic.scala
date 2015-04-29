@@ -49,7 +49,6 @@ class TopicRoot extends Actor with ActorLogging {
 }
 
 class Topic(name: String) extends Actor with ActorLogging {
-  var count: Int = 0
   val subscriberMap: Map[String, ActorRef] = Map()
 
   def receive = {
@@ -57,7 +56,7 @@ class Topic(name: String) extends Actor with ActorLogging {
     //
     //    }
     case Subscribe(clientId) => {
-      log.info("Subscribe client({}) topic({})", clientId, name)
+      log.debug("Subscribe client({}) topic({})", clientId, name)
       subscriberMap.+=((clientId, sender))
       //      context.watch(sender())
       printEverySubscriber
@@ -79,15 +78,16 @@ class Topic(name: String) extends Actor with ActorLogging {
       log.debug("qos : {} , retain : {} , payload : {} , sender {}", qos, retain, new String(payload), sender)
       sender ! TopicInMessageAck
       subscriberMap.values.foreach(
-        (actor) => actor ! TopicOutMessage(payload, qos, retain, name)
+        (actor) => {
+          actor ! TopicOutMessage(payload, qos, retain, name)}
       )
     }
     case TopicOutMessageAck =>
   }
 
   def printEverySubscriber = {
-    log.info("{}'s subscriber ", name)
-    subscriberMap.foreach(s => log.info("{},", s._1))
+    log.debug("{}'s subscriber ", name)
+    subscriberMap.foreach(s => log.debug("{},", s._1))
   }
 }
 

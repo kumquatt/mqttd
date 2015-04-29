@@ -1,12 +1,14 @@
 package plantae.citrus.mqtt.actors.session
 
 import java.io._
-import java.util.UUID
+import java.text.SimpleDateFormat
+import java.util.{Date, UUID}
 
 import plantae.citrus.mqtt.dto.publish.PUBLISH
 import plantae.citrus.mqtt.dto.{INT, PUBLISHPAYLOAD, STRING}
 
 class Storage(sessionName: String) extends Serializable {
+  val chunkSize = 50
 
   sealed trait Location
 
@@ -18,7 +20,8 @@ class Storage(sessionName: String) extends Serializable {
 
   case class ChunkMessage(var location: Location, var readyMessages: List[ReadyMessage]) {
     def serialize = {
-      new File("data/" + sessionName).mkdir()
+
+      new File("data/" + (new SimpleDateFormat("yyyy/MM/dd").format(new Date())) + "/" + sessionName).mkdir()
       val name = "data/" + sessionName + "/" + UUID.randomUUID().toString
       val outputStreamer = new ObjectOutputStream(new FileOutputStream(name))
       outputStreamer.writeObject(this)
@@ -57,7 +60,7 @@ class Storage(sessionName: String) extends Serializable {
   def persist(payload: Array[Byte], qos: Short, retain: Boolean, topic: String) = {
     readyQueue match {
       case head :: rest => {
-        if (readyQueue.last.readyMessages.size >= 50) {
+        if (readyQueue.last.readyMessages.size >= chunkSize) {
           if (readyQueue.last != readyQueue.head) {
             readyQueue.last.serialize
           }
@@ -136,6 +139,12 @@ class Storage(sessionName: String) extends Serializable {
     packetIdGenerator
   }
 
+  def messageSize = {
+    readyQueue.foldLeft(0)((a, b) => a + (b.location match {
+      case OnMemory => b.readyMessages.size
+      case x: OnDisk => chunkSize
+    }))
+  }
 }
 
 object Storage {

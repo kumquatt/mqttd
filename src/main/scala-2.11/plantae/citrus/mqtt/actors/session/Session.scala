@@ -103,8 +103,10 @@ class Session extends Actor with ActorLogging {
         case Some(x) =>
           x.handleWill
           x.destory
-        case None =>
+          log.info(" disconnected without DISCONNECT : [{}]", self.path.name)
+        case None => log.info(" disconnected after DISCONNECT : [{}]", self.path.name)
       }
+
     }
   }
 
@@ -113,9 +115,9 @@ class Session extends Actor with ActorLogging {
     case None =>
   }
 
-  private def inboundActorName(packetId: INT) = PublishConstant.inboundPrefix + packetId.value
+  private def inboundActorName(uniqueId: String) = PublishConstant.inboundPrefix + uniqueId
 
-  private def outboundActorName(packetId: INT) = PublishConstant.outboundPrefix + packetId.value
+  private def outboundActorName(uniqueId: String) = PublishConstant.outboundPrefix + uniqueId
 
   def handleMQTTPacket(packet: Packet, bridge: ActorRef): Unit = {
     resetTimer
@@ -123,6 +125,7 @@ class Session extends Actor with ActorLogging {
       case mqtt: CONNECT =>
         connectionStatus = Some(ConnectionStatus(mqtt.will, mqtt.keepAlive.value, self, context, sender))
         bridge ! MQTTOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
+        log.info("new connection establish : [{}]", self.path.name)
         invokePublish
 
       case PINGREQ =>
@@ -131,35 +134,35 @@ class Session extends Actor with ActorLogging {
       case mqtt: PUBLISH => {
         context.actorOf(Props(classOf[InboundPublisher], sender, mqtt.qos.value), {
           mqtt.qos.value match {
-            case 0 => UUID.randomUUID().toString
-            case 1 => inboundActorName(mqtt.packetId.get)
-            case 2 => inboundActorName(mqtt.packetId.get)
+            case 0 => inboundActorName(UUID.randomUUID().toString)
+            case 1 => inboundActorName(mqtt.packetId.get.value.toString)
+            case 2 => inboundActorName(mqtt.packetId.get.value.toString)
           }
         }) ! mqtt
       }
 
       case mqtt: PUBREL =>
-        context.child(inboundActorName(mqtt.packetId)) match {
+        context.child(inboundActorName(mqtt.packetId.value.toString)) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish inbound actor {}", inboundActorName(mqtt.packetId))
+          case None => log.error("can't find publish inbound actor {}", inboundActorName(mqtt.packetId.value.toString))
         }
 
       case mqtt: PUBREC =>
-        context.child(outboundActorName(mqtt.packetId)) match {
+        context.child(outboundActorName(mqtt.packetId.value.toString)) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId))
+          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId.value.toString))
         }
 
       case mqtt: PUBACK =>
-        context.child(outboundActorName(mqtt.packetId)) match {
+        context.child(outboundActorName(mqtt.packetId.value.toString)) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId))
+          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId.value.toString))
         }
 
       case mqtt: PUBCOMB =>
-        context.child(outboundActorName(mqtt.packetId)) match {
+        context.child(outboundActorName(mqtt.packetId.value.toString)) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId))
+          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId.value.toString))
         }
 
       case DISCONNECT => {
@@ -169,6 +172,8 @@ class Session extends Actor with ActorLogging {
           case Some(x) => x.destory
           case None =>
         }
+        log.info(" receive DISCONNECT : [{}]", self.path.name)
+
       }
 
       case subscribe: SUBSCRIBE =>
@@ -223,12 +228,12 @@ class Session extends Actor with ActorLogging {
 
             context.child(actorName) match {
               case Some(actor) =>
-                actor ! x
                 log.debug("using exist actor publish  complete {} ", actorName)
+                actor ! x
 
               case None =>
-                context.actorOf(Props(classOf[OutboundPublisher], client.socket, session), actorName) ! x
                 log.debug("create new actor publish  complete {} ", actorName)
+                context.actorOf(Props(classOf[OutboundPublisher], client.socket, session), actorName) ! x
 
             }
 

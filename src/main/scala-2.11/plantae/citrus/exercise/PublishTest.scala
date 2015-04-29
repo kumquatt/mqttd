@@ -4,8 +4,10 @@ import org.eclipse.paho.client.mqttv3._
 
 
 object PublishTest extends App {
+//  val port = 1883
+  val port = 8888
   var option = new MqttConnectOptions()
-  var client1 = new MqttClient("tcp://localhost:8888", "customer_1")
+  var client1 = new MqttClient("tcp://localhost:" + port, "customer1")
   client1.setCallback(
     new MqttCallback {
       var count = 0
@@ -23,14 +25,15 @@ object PublishTest extends App {
     }
   )
   option.setKeepAliveInterval(100)
+  option.setCleanSession(true)
   client1.connect(option)
   println("client1 => connection complete")
-  client1.subscribe(Array("test"))
-  Thread.sleep(1000)
+  client1.subscribe(Array("test2"))
+  println("client1 => subscribe")
 
 
   var option2 = new MqttConnectOptions()
-  var client2 = new MqttClient("tcp://localhost:8888", "customer_2")
+  var client2 = new MqttClient("tcp://localhost:"+ port, "customer2")
   client2.setCallback(
     new MqttCallback {
       var count = 0
@@ -46,20 +49,21 @@ object PublishTest extends App {
     }
   )
   option2.setKeepAliveInterval(100)
+  option2.setCleanSession(true)
   client2.connect(option2)
   println("client2 => connection complete")
 
   client2.subscribe(Array("test2"))
   println("client2 => subscribe complete")
 
-  Range(1, 5000).foreach(count => {
+  Range(1, 10000).foreach(count => {
     println("publish " + count)
-    client1.publish("test2", ("qos 0 message " + count + " test publish").getBytes(), 0, false)
+    client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)" ).getBytes(), 2, false)
   }
   )
+  Thread.sleep(10000)
   client1.disconnect()
   println("client1 => disconnection complete")
-
 
 
   while (true) {

@@ -81,12 +81,12 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
   when(WaitPubAck) {
     case Event(PUBACK(packetId), waitPublish) =>
 
-      log.info("expected : {} , real {}, actor-name : {} , status : {}", publishActor.path.name.drop(PublishConstant.outboundPrefix.length).toShort, packetId.value, self.path.name, "WaitPubAck")
+      log.debug("expected : {} , real {}, actor-name : {} , status : {}", publishActor.path.name.drop(PublishConstant.outboundPrefix.length).toShort, packetId.value, self.path.name, "WaitPubAck")
       session ! OutboundPublishDone(Some(packetId.value))
       stop(FSM.Shutdown)
 
     case anyOtherCase =>
-      log.info("unexpected case : {} , actor-name : {} , status : {}", anyOtherCase, self.path.name, "WaitPubAck")
+      log.debug("unexpected case : {} , actor-name : {} , status : {}", anyOtherCase, self.path.name, "WaitPubAck")
       stop(FSM.Shutdown)
   }
 
@@ -154,6 +154,8 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
 
   when(WaitPublish) {
     case Event(publish: PUBLISH, waitPublish) =>
+      log.debug(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
+
       ActorContainer.invokeCallback(DirectoryReq(publish.topic.value, TypeTopic), context, Props(new Actor {
         def receive = {
           case DirectoryResp2(name, actors) =>
