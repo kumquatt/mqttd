@@ -3,8 +3,8 @@ package plantae.citrus.mqtt.actors.session
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
-import plantae.citrus.mqtt.actors.ActorContainer
-import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectoryResp, TypeTopic}
+import plantae.citrus.mqtt.actors.SystemRoot
+import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectorySessionResult, TypeTopic}
 import plantae.citrus.mqtt.actors.topic.TopicInMessage
 import plantae.citrus.mqtt.dto.BYTE
 import plantae.citrus.mqtt.dto.connect.Will
@@ -18,7 +18,7 @@ import scala.concurrent.duration.FiniteDuration
 case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: ActorRef, sessionContext: ActorContext, socket: ActorRef) {
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
-  private var keepAliveTimer: Cancellable = ActorContainer.system.scheduler.scheduleOnce(
+  private var keepAliveTimer: Cancellable = SystemRoot.system.scheduler.scheduleOnce(
     FiniteDuration(keepAliveTime, TimeUnit.SECONDS), session, SessionKeepAliveTimeOut)
 
   private var publishActor: Option[ActorRef] = None
@@ -29,16 +29,16 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
 
   def resetTimer = {
     cancelTimer
-    keepAliveTimer = ActorContainer.system.scheduler.scheduleOnce(
+    keepAliveTimer = SystemRoot.system.scheduler.scheduleOnce(
       FiniteDuration(keepAliveTime, TimeUnit.SECONDS), session, SessionKeepAliveTimeOut)
   }
 
   def handleWill = {
     will match {
       case Some(x) =>
-        ActorContainer.invokeCallback(DirectoryReq(x.topic.value, TypeTopic), sessionContext, Props(new Actor {
+        SystemRoot.invokeCallback(DirectoryReq(x.topic.value, TypeTopic), sessionContext, Props(new Actor {
           def receive = {
-            case DirectoryResp(name, actor) =>
+            case DirectorySessionResult(name, actor) =>
               val topicInMessage = TopicInMessage(x.message.value.getBytes, (x.qos >> 3 & BYTE(0x03.toByte)).value.toShort, x.retain, x.qos.value.toShort match {
                 case 0 => None
                 case qos if (qos > 0) => Some(1)

@@ -14,9 +14,9 @@ sealed trait DirectoryOperation
 
 case class DirectoryReq(name: String, actorType: ActorType) extends DirectoryOperation
 
-case class DirectoryResp(name: String, actor: ActorRef) extends DirectoryOperation
+case class DirectorySessionResult(name: String, actor: ActorRef) extends DirectoryOperation
 
-case class DirectoryResp2(name: String, actors: List[ActorRef]) extends DirectoryOperation
+case class DirectoryTopicResult(name: String, actors: List[ActorRef]) extends DirectoryOperation
 
 sealed trait ActorType
 
@@ -27,12 +27,11 @@ case object TypeTopic extends ActorType
 class DirectoryProxy extends Actor with ActorLogging {
 
   var router = {
-    val routees = Vector.fill(5) {
+    Router(RoundRobinRoutingLogic(), Vector.fill(5) {
       val r = context.actorOf(Props[Directory])
       context watch r
       ActorRefRoutee(r)
-    }
-    Router(RoundRobinRoutingLogic(), routees)
+    })
   }
 
   def receive = {
@@ -53,22 +52,14 @@ class Directory extends Actor with ActorLogging {
     case DirectoryReq(name, actorType) => {
       actorType match {
         case TypeSession =>
-          sender ! DirectoryResp(name,
-          Await.result(
-          ActorContainer.sessionRoot ? name, Duration.Inf).asInstanceOf[ActorRef])
+          sender ! DirectorySessionResult(name,
+            Await.result(
+              SystemRoot.sessionRoot ? name, Duration.Inf).asInstanceOf[ActorRef])
         case TypeTopic =>
-          sender ! DirectoryResp2(name,
-          Await.result(
-          ActorContainer.topicRoot ? name, Duration.Inf).asInstanceOf[List[ActorRef]])
+          sender ! DirectoryTopicResult(name,
+            Await.result(
+              SystemRoot.topicRoot ? name, Duration.Inf).asInstanceOf[List[ActorRef]])
       }
-//      sender ! DirectoryResp(name,
-//        Await.result(
-//          (actorType match {
-//            case TypeSession => ActorContainer.sessionRoot
-//            case TypeTopic => ActorContainer.topicRoot
-//          }) ? name, Duration.Inf).asInstanceOf[ActorRef]
-//      )
     }
   }
-
 }

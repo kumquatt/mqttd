@@ -6,12 +6,13 @@ import java.util.{Date, UUID}
 
 import com.google.common.base.Throwables
 import org.slf4j.LoggerFactory
+import plantae.citrus.mqtt.actors.SystemRoot
 import plantae.citrus.mqtt.dto.publish.PUBLISH
 import plantae.citrus.mqtt.dto.{INT, PUBLISHPAYLOAD, STRING}
 
 class Storage(sessionName: String) extends Serializable {
   private val log = LoggerFactory.getLogger(getClass() + sessionName)
-  val chunkSize = 10
+  private val chunkSize = 10
 
   sealed trait Location
 

@@ -191,8 +191,8 @@ class Session extends Actor with ActorLogging {
     val clientId = self.path.name
 
     val result = topicFilters.map(tp =>
-      Await.result(ActorContainer.directoryProxy ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
-        case DirectoryResp2(topicName, options) =>
+      Await.result(SystemRoot.directoryProxy ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
+        case DirectoryTopicResult(topicName, options) =>
           options.foreach(actor => actor ! Subscribe(self.path.name))
           //          option ! Subscribe(self.path.name)
           BYTE(0x00)
@@ -203,9 +203,9 @@ class Session extends Actor with ActorLogging {
 
   def unsubscribeTopics(topics: List[STRING]) = {
     topics.foreach(x => {
-      ActorContainer.invokeCallback(DirectoryReq(x.value, TypeTopic), context, Props(new Actor {
+      SystemRoot.invokeCallback(DirectoryReq(x.value, TypeTopic), context, Props(new Actor {
         def receive = {
-          case DirectoryResp2(name, topicActors) =>
+          case DirectoryTopicResult(name, topicActors) =>
             topicActors.foreach(actor => actor ! Unsubscribe(self.path.name))
           //          topicActor != UNSUBSCRIBE
         }

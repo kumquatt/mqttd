@@ -1,8 +1,8 @@
 package plantae.citrus.mqtt.actors.session
 
 import akka.actor._
-import plantae.citrus.mqtt.actors.ActorContainer
-import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectoryResp2, TypeTopic}
+import plantae.citrus.mqtt.actors.SystemRoot
+import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectoryTopicResult, TypeTopic}
 import plantae.citrus.mqtt.actors.topic.{TopicInMessage, TopicInMessageAck}
 import plantae.citrus.mqtt.dto.INT
 import plantae.citrus.mqtt.dto.publish._
@@ -54,10 +54,10 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
     super.postStop
   }
 
-  startWith(WaitPublish, Uninitialized)
+  startWith(WaitPublish, null)
 
   when(WaitPublish) {
-    case Event(publish: PUBLISH, waitPublish) =>
+    case Event(publish: PUBLISH, _) =>
       log.debug(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
 
       client ! MQTTOutboundPacket(publish)
@@ -79,7 +79,7 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
   }
 
   when(WaitPubAck) {
-    case Event(PUBACK(packetId), waitPublish) =>
+    case Event(PUBACK(packetId), _) =>
 
       log.debug("expected : {} , real {}, actor-name : {} , status : {}", publishActor.path.name.drop(PublishConstant.outboundPrefix.length).toShort, packetId.value, self.path.name, "WaitPubAck")
       session ! OutboundPublishDone(Some(packetId.value))
@@ -92,7 +92,7 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
 
   when(WaitPubRec) {
 
-    case Event(PUBREC(packetId), waitPublish) =>
+    case Event(PUBREC(packetId), _) =>
       log.debug("expected : {} , real {}, actor-name : {} , status : {}", publishActor.path.name.drop(PublishConstant.outboundPrefix.length).toShort, packetId.value, self.path.name, "WaitPubRec")
 
       client ! MQTTOutboundPacket(PUBREL(packetId))
@@ -107,7 +107,7 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
 
   when(WaitPubComb) {
 
-    case Event(PUBCOMB(packetId), waitPubRec) =>
+    case Event(PUBCOMB(packetId), _) =>
       log.debug("expected : {} , real {}, actor-name : {} , status : {}", publishActor.path.name.drop(PublishConstant.outboundPrefix.length).toShort, packetId.value, self.path.name, "WaitPubComb")
 
       session ! OutboundPublishDone(Some(packetId.value))
@@ -150,15 +150,15 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
     super.postStop
   }
 
-  startWith(WaitPublish, Uninitialized)
+  startWith(WaitPublish, null)
 
   when(WaitPublish) {
-    case Event(publish: PUBLISH, waitPublish) =>
+    case Event(publish: PUBLISH, _) =>
       log.debug(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
 
-      ActorContainer.invokeCallback(DirectoryReq(publish.topic.value, TypeTopic), context, Props(new Actor {
+      SystemRoot.invokeCallback(DirectoryReq(publish.topic.value, TypeTopic), context, Props(new Actor {
         def receive = {
-          case DirectoryResp2(name, actors) =>
+          case DirectoryTopicResult(name, actors) =>
             actors.foreach(actor =>
               actor.tell(
                 TopicInMessage(publish.data.value, publish.qos.value, publish.retain,
@@ -185,8 +185,10 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
 
   }
 
+
+
   when(WaitTopicResponseQos0) {
-    case Event(TopicInMessageAck, waitPublish) =>
+    case Event(TopicInMessageAck, _) =>
       log.debug(" actor-name : {} , status : {}", self.path.name, "WaitTopicResponseQos0")
 
       stop(FSM.Shutdown)
@@ -200,7 +202,7 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
 
 
   when(WaitTopicResponseQos1) {
-    case Event(TopicInMessageAck, waitPublish) =>
+    case Event(TopicInMessageAck, _) =>
       packetId match {
         case Some(x) =>
           log.debug(" actor-name : {} , status : {}", self.path.name, "WaitTopicResponseQos1")
@@ -216,7 +218,7 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
   }
 
   when(WaitTopicResponseQos2) {
-    case Event(TopicInMessageAck, waitPublish) =>
+    case Event(TopicInMessageAck, _) =>
       packetId match {
         case Some(x) =>
           log.debug(" actor-name : {} , status : {}", self.path.name, "WaitTopicResponseQos2")
@@ -232,7 +234,7 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
   }
 
   when(WaitPubRel) {
-    case Event(PUBREL(INT(pubRelPacketId)), waitPublish) =>
+    case Event(PUBREL(INT(pubRelPacketId)), _) =>
       packetId match {
         case Some(x) if (x == pubRelPacketId) =>
           log.debug(" actor-name : {} , status : {}", self.path.name, "WaitPubRel")
