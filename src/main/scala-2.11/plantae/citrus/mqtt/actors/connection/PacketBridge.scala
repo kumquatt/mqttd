@@ -1,24 +1,13 @@
 package plantae.citrus.mqtt.actors.connection
 
-import java.util.concurrent.TimeUnit
-
 import akka.actor._
 import akka.io.Tcp.{PeerClosed, Received, Write}
-import akka.pattern.ask
 import akka.util.ByteString
 import plantae.citrus.mqtt.actors.SystemRoot
 import plantae.citrus.mqtt.actors.directory._
 import plantae.citrus.mqtt.actors.session._
 import plantae.citrus.mqtt.dto.connect._
 import plantae.citrus.mqtt.dto.{Packet, PacketDecoder}
-
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext}
-
-/**
- * Created by yinjae on 15. 4. 21..
- */
-
 
 sealed trait PacketBridgeStatus
 
@@ -33,18 +22,34 @@ case object WaitAny extends PacketBridgeStatus
 case class ProxyContainer(session: ActorRef, bridge: ActorRef, send: Packet)
 
 class PacketBridge(socket: ActorRef) extends FSM[PacketBridgeStatus, ProxyContainer] with ActorLogging {
-  implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
-  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
-
   startWith(WaitConnect, ProxyContainer(null, self, null))
 
   when(WaitConnect) {
     case Event(Received(data), proxyContainer: ProxyContainer) =>
       PacketDecoder.decode(data.toArray) match {
         case (head: CONNECT) :: Nil =>
-          val get = Get(head.clientId.value, head.cleanSession)
-          val sessionChecker = context.actorOf(Props(classOf[SessionChecker], this))
-          sessionChecker.tell(get, self)
+
+          SystemRoot.invokeCallback(DirectoryReq(head.clientId.value, TypeSession),
+            context, Props(new Actor with ActorLogging {
+              def receive = {
+                case DirectorySessionResult(name, session) => {
+                  if (head.cleanSession) {
+                    context.watch(session)
+                    context.stop(session)
+                    context.become({ case Terminated(x) =>
+                      SystemRoot.sessionRoot ! name
+                    case newSession:ActorRef =>
+                      proxyContainer.bridge ! newSession
+                      context.stop(self)
+                    })
+                  } else {
+                    proxyContainer.bridge ! session
+                    context.stop(self)
+                  }
+                }
+              }
+            })
+          )
           goto(WaitSession) using ProxyContainer(null, proxyContainer.bridge, head)
       }
   }
@@ -54,8 +59,6 @@ class PacketBridge(socket: ActorRef) extends FSM[PacketBridgeStatus, ProxyContai
       session ! MQTTInboundPacket(proxyContainer.send)
       goto(WaitConnAct) using ProxyContainer(session, proxyContainer.bridge, null)
   }
-
-
 
 
   when(WaitConnAct) {
@@ -94,30 +97,5 @@ class PacketBridge(socket: ActorRef) extends FSM[PacketBridgeStatus, ProxyContai
   }
 
   initialize()
-
-  case class Get(clientId: String, cleanSession: Boolean)
-
-  class SessionChecker() extends Actor {
-
-    def receive = {
-      case Get(clientId, cleanSession) => {
-        val doSessionActor: ActorRef = sender()
-        SystemRoot.invokeCallback(DirectoryReq(clientId, TypeSession),
-          context, Props(new Actor with ActorLogging {
-            def receive = {
-              case DirectorySessionResult(name, session) => {
-                if (cleanSession) {
-                  Await.result(session ? SessionReset, Duration.Inf)
-                }
-                log.debug("clientSession[{}] is passed to [{}]", session.path.name, doSessionActor.path.name)
-                doSessionActor ! session
-              }
-            }
-          })
-        )
-      }
-    }
-  }
-
 }
 

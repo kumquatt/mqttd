@@ -49,7 +49,7 @@ object PublishTest extends App {
     }
   )
   option2.setKeepAliveInterval(100)
-  option2.setCleanSession(true)
+  option2.setCleanSession(false)
   client2.connect(option2)
   println("client2 => connection complete")
 
@@ -83,7 +83,7 @@ object PublishTest extends App {
   client3.disconnect()
 
 
-  Range(1, 10000).foreach(count => {
+  Range(1, 3000).foreach(count => {
     println("publish " + count)
     client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)").getBytes(), 0, false)
   }
@@ -102,7 +102,7 @@ object PublishTest extends App {
       override def connectionLost(throwable: Throwable): Unit = {}
     }
   )
-
+  option3.setCleanSession(true)
   client3.connect(option3)
   println("client3 => connection complete")
 
