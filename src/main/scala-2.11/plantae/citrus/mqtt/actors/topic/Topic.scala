@@ -152,9 +152,7 @@ case class DiskTreeNode[A](name: String, fullPath: String, children: Map[String,
         x match {
           case "*" => getEveryNodes()
           case "+" => {
-            children.filter(x => x._2.topic.isDefined).map(y => y._2.topic match {
-              case Some(t) => t
-            }).toList
+            children.filter(x => x._2.topic.isDefined).map(y => y._2.topic.get).toList
           }
           case _ => {
             children.get(x) match {

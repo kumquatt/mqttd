@@ -18,18 +18,11 @@ import plantae.citrus.mqtt.dto.unsubscribe.{UNSUBACK, UNSUBSCRIBE}
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
-
 case class MQTTInboundPacket(mqttPacket: Packet)
 
 case class MQTTOutboundPacket(mqttPacket: Packet)
 
 sealed trait SessionRequest
-
-sealed trait SessionResponse
-
-case object SessionReset extends SessionRequest
-
-case object SessionResetAck extends SessionResponse
 
 case object SessionKeepAliveTimeOut extends SessionRequest
 
@@ -50,9 +43,17 @@ class SessionRoot extends Actor with ActorLogging {
 class Session extends Actor with ActorLogging {
   implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
 
-  var connectionStatus: Option[ConnectionStatus] = None
-  val storage = Storage(self.path.name)
+  private var connectionStatus: Option[ConnectionStatus] = None
+  private val storage = Storage(self.path.name)
 
+  override def postStop = {
+    connectionStatus match {
+      case Some(x) => x.cancelTimer
+        connectionStatus = None
+      case None =>
+    }
+    storage.clear
+  }
 
   override def receive: Receive = {
     case MQTTInboundPacket(packet) => handleMQTTPacket(packet, sender)
@@ -84,15 +85,11 @@ class Session extends Actor with ActorLogging {
 
   def handleSession(command: SessionRequest): Unit = command match {
 
-    case SessionReset => {
-      log.debug("session reset : " + self.path.name)
-      connectionStatus = None
-      storage.clear
-      sender ! SessionResetAck
-    }
-
     case SessionKeepAliveTimeOut => {
-      log.debug("No keep alive request!!!!")
+      connectionStatus match {
+        case Some(x) => context.stop(x.socket)
+        case None =>
+      }
     }
 
     case ClientCloseConnection => {
@@ -188,8 +185,6 @@ class Session extends Actor with ActorLogging {
   }
 
   def subscribeTopics(topicFilters: List[TopicFilter]): List[BYTE] = {
-    val clientId = self.path.name
-
     val result = topicFilters.map(tp =>
       Await.result(SystemRoot.directoryProxy ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
         case DirectoryTopicResult(topicName, options) =>
@@ -234,7 +229,6 @@ class Session extends Actor with ActorLogging {
               case None =>
                 log.debug("create new actor publish  complete {} ", actorName)
                 context.actorOf(Props(classOf[OutboundPublisher], client.socket, session), actorName) ! x
-
             }
 
           case None => log.debug("invoke publish but no message : child actor count - {} ", context.children.foldLeft(List[String]())((x, ac) => x :+ ac.path.name))

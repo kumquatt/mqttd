@@ -9,31 +9,31 @@ import plantae.citrus.mqtt.actors.session._
 import plantae.citrus.mqtt.dto.connect._
 import plantae.citrus.mqtt.dto.{Packet, PacketDecoder}
 
-sealed trait PacketBridgeStatus
+sealed trait BridgeState
 
-case object WaitConnect extends PacketBridgeStatus
+case object ConnectionWaitConnect extends BridgeState
 
-case object WaitSession extends PacketBridgeStatus
+case object ConnectionGetSession extends BridgeState
 
-case object WaitConnAct extends PacketBridgeStatus
+case object ConnectionForwardConnAct extends BridgeState
 
-case object WaitAny extends PacketBridgeStatus
+case object ConnectionEstablished extends BridgeState
 
-sealed trait ProxyData
+sealed trait BridgeData
 
-case class SessionCreateContainer(bridge: ActorRef, send: Packet) extends ProxyData
+case class SessionCreateContainer(bridge: ActorRef, send: Packet) extends BridgeData
 
-case class BridgeContainer(session: ActorRef, bridge: ActorRef) extends ProxyData
+case class BridgeContainer(session: ActorRef, bridge: ActorRef) extends BridgeData
 
-class PacketBridge(socket: ActorRef) extends FSM[PacketBridgeStatus, ProxyData] with ActorLogging {
-  startWith(WaitConnect, SessionCreateContainer(self, null))
+class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with ActorLogging {
+  startWith(ConnectionWaitConnect, SessionCreateContainer(self, null))
 
-  when(WaitConnect) {
+  when(ConnectionWaitConnect) {
     case Event(Received(data), container: SessionCreateContainer) =>
       PacketDecoder.decode(data.toArray) match {
         case (head: CONNECT) :: Nil =>
-          SystemRoot.invokeCallback(DirectoryReq(head.clientId.value, TypeSession),
-            context, Props(new Actor with ActorLogging {
+          SystemRoot.directoryProxy.tell(DirectoryReq(head.clientId.value, TypeSession),
+            context.actorOf(Props(new Actor with ActorLogging {
               def receive = {
                 case DirectorySessionResult(name, session) => {
                   if (head.cleanSession) {
@@ -52,32 +52,33 @@ class PacketBridge(socket: ActorRef) extends FSM[PacketBridgeStatus, ProxyData] 
                 }
               }
             })
+            )
           )
-          goto(WaitSession) using SessionCreateContainer(container.bridge, head)
+          goto(ConnectionGetSession) using SessionCreateContainer(container.bridge, head)
+        case _ => stop(FSM.Shutdown)
       }
   }
 
-  when(WaitSession) {
+  when(ConnectionGetSession) {
     case Event(session: ActorRef, container: SessionCreateContainer) =>
       session ! MQTTInboundPacket(container.send)
-      goto(WaitConnAct) using BridgeContainer(session, container.bridge)
+      goto(ConnectionForwardConnAct) using BridgeContainer(session, container.bridge)
   }
 
 
-  when(WaitConnAct) {
+  when(ConnectionForwardConnAct) {
     case Event(MQTTOutboundPacket(connAck: CONNACK), container: BridgeContainer) =>
       socket ! Write(ByteString(connAck.encode))
-      goto(WaitAny) using container
+      goto(ConnectionEstablished) using container
   }
 
-  when(WaitAny) {
+  when(ConnectionEstablished) {
     case Event(MQTTOutboundPacket(packet: Packet), container: BridgeContainer) =>
       socket ! Write(ByteString(packet.encode))
-      stay() using container
+      stay using container
 
     case Event(DISCONNECT, container: BridgeContainer) =>
       container.session ! MQTTInboundPacket(DISCONNECT)
-
       stop(FSM.Shutdown)
 
     case Event(packet: Packet, container: BridgeContainer) =>
