@@ -4,10 +4,13 @@ import java.io._
 import java.text.SimpleDateFormat
 import java.util.{Date, UUID}
 
+import com.google.common.base.Throwables
+import org.slf4j.LoggerFactory
 import plantae.citrus.mqtt.dto.publish.PUBLISH
 import plantae.citrus.mqtt.dto.{INT, PUBLISHPAYLOAD, STRING}
 
 class Storage(sessionName: String) extends Serializable {
+  private val log = LoggerFactory.getLogger(getClass() + sessionName)
   val chunkSize = 10
 
   sealed trait Location
@@ -20,14 +23,20 @@ class Storage(sessionName: String) extends Serializable {
 
   case class ChunkMessage(var location: Location, var readyMessages: List[ReadyMessage]) {
     def serialize = {
-      val directory = new File("data/" + sessionName + "/" + (new SimpleDateFormat("yyyy/MM/dd").format(new Date())))
-      directory.mkdirs()
-      val path: String = directory.getAbsolutePath + "/" + UUID.randomUUID().toString
-      val outputStreamer = new ObjectOutputStream(new FileOutputStream(path))
-      outputStreamer.writeObject(this)
-      outputStreamer.close()
-      location = OnDisk(path)
-      readyMessages = List()
+      try {
+        val directory = new File("data/" + sessionName + "/" + (new SimpleDateFormat("yyyy/MM/dd").format(new Date())))
+        directory.mkdirs()
+        val path: String = directory.getAbsolutePath + "/" + UUID.randomUUID().toString
+        val outputStreamer = new ObjectOutputStream(new FileOutputStream(path))
+        outputStreamer.writeObject(this)
+        outputStreamer.close()
+        location = OnDisk(path)
+        readyMessages = List()
+      } catch {
+        case t: Throwable => location = OnMemory
+          log.error(" Chunck serialize error : {} ", Throwables.getStackTraceAsString(t))
+
+      }
     }
 
     def deserialize = {
