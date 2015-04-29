@@ -19,16 +19,19 @@ case object WaitConnAct extends PacketBridgeStatus
 
 case object WaitAny extends PacketBridgeStatus
 
-case class ProxyContainer(session: ActorRef, bridge: ActorRef, send: Packet)
+sealed trait ProxyData
 
-class PacketBridge(socket: ActorRef) extends FSM[PacketBridgeStatus, ProxyContainer] with ActorLogging {
-  startWith(WaitConnect, ProxyContainer(null, self, null))
+case class SessionCreateContainer(bridge: ActorRef, send: Packet) extends ProxyData
+
+case class BridgeContainer(session: ActorRef, bridge: ActorRef) extends ProxyData
+
+class PacketBridge(socket: ActorRef) extends FSM[PacketBridgeStatus, ProxyData] with ActorLogging {
+  startWith(WaitConnect, SessionCreateContainer(self, null))
 
   when(WaitConnect) {
-    case Event(Received(data), proxyContainer: ProxyContainer) =>
+    case Event(Received(data), container: SessionCreateContainer) =>
       PacketDecoder.decode(data.toArray) match {
         case (head: CONNECT) :: Nil =>
-
           SystemRoot.invokeCallback(DirectoryReq(head.clientId.value, TypeSession),
             context, Props(new Actor with ActorLogging {
               def receive = {
@@ -38,55 +41,55 @@ class PacketBridge(socket: ActorRef) extends FSM[PacketBridgeStatus, ProxyContai
                     context.stop(session)
                     context.become({ case Terminated(x) =>
                       SystemRoot.sessionRoot ! name
-                    case newSession:ActorRef =>
-                      proxyContainer.bridge ! newSession
+                    case newSession: ActorRef =>
+                      container.bridge ! newSession
                       context.stop(self)
                     })
                   } else {
-                    proxyContainer.bridge ! session
+                    container.bridge ! session
                     context.stop(self)
                   }
                 }
               }
             })
           )
-          goto(WaitSession) using ProxyContainer(null, proxyContainer.bridge, head)
+          goto(WaitSession) using SessionCreateContainer(container.bridge, head)
       }
   }
 
   when(WaitSession) {
-    case Event(session: ActorRef, proxyContainer: ProxyContainer) =>
-      session ! MQTTInboundPacket(proxyContainer.send)
-      goto(WaitConnAct) using ProxyContainer(session, proxyContainer.bridge, null)
+    case Event(session: ActorRef, container: SessionCreateContainer) =>
+      session ! MQTTInboundPacket(container.send)
+      goto(WaitConnAct) using BridgeContainer(session, container.bridge)
   }
 
 
   when(WaitConnAct) {
-    case Event(MQTTOutboundPacket(connAck: CONNACK), proxyContainer: ProxyContainer) =>
+    case Event(MQTTOutboundPacket(connAck: CONNACK), container: BridgeContainer) =>
       socket ! Write(ByteString(connAck.encode))
-      goto(WaitAny) using proxyContainer
+      goto(WaitAny) using container
   }
 
   when(WaitAny) {
-    case Event(MQTTOutboundPacket(packet: Packet), proxyContainer: ProxyContainer) =>
+    case Event(MQTTOutboundPacket(packet: Packet), container: BridgeContainer) =>
       socket ! Write(ByteString(packet.encode))
-      stay() using proxyContainer
+      stay() using container
 
-    case Event(DISCONNECT, proxyContainer: ProxyContainer) =>
-      proxyContainer.session ! MQTTInboundPacket(DISCONNECT)
+    case Event(DISCONNECT, container: BridgeContainer) =>
+      container.session ! MQTTInboundPacket(DISCONNECT)
 
       stop(FSM.Shutdown)
 
-    case Event(packet: Packet, proxyContainer: ProxyContainer) =>
-      proxyContainer.session ! MQTTInboundPacket(packet)
-      stay using proxyContainer
+    case Event(packet: Packet, container: BridgeContainer) =>
+      container.session ! MQTTInboundPacket(packet)
+      stay using container
 
-    case Event(Received(data), proxyContainer: ProxyContainer) =>
-      PacketDecoder.decode(data.toArray).foreach(proxyContainer.bridge ! _)
-      stay using proxyContainer
+    case Event(Received(data), container: BridgeContainer) =>
+      PacketDecoder.decode(data.toArray).foreach(container.bridge ! _)
+      stay using container
 
-    case Event(PeerClosed, proxyContainer: ProxyContainer) =>
-      proxyContainer.session ! ClientCloseConnection
+    case Event(PeerClosed, container: BridgeContainer) =>
+      container.session ! ClientCloseConnection
       stop(FSM.Shutdown)
   }
 
