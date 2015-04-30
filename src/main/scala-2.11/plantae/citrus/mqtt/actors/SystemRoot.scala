@@ -13,11 +13,21 @@ import plantae.citrus.mqtt.actors.topic.TopicRoot
  */
 object SystemRoot {
 
+
   val config = {
     val config = ConfigFactory.load()
     val builder = new StringBuilder
-    if(config.getString("akka.remote.netty.tcp.hostname") == null) {
-      builder.append("akka.remote.netty.tcp.hostname = "+InetAddress.getLocalHost().getHostAddress)
+    if (config.getString("akka.remote.netty.tcp.hostname") == null) {
+      builder.append("akka.remote.netty.tcp.hostname = " + {
+        InetAddress.getAllByName(InetAddress.getLocalHost().getCanonicalHostName()) match {
+          case null => "127.0.0.1"
+          case Array() => "127.0.0.1"
+          case hostNames: Array[InetAddress] => hostNames.filterNot(x => x.getHostAddress.startsWith("127")) match {
+            case Array() => "127.0.0.1"
+            case other: Array[InetAddress] => other(0).getHostAddress
+          }
+        }
+      })
     }
     println("akka.remote.netty.tcp.hostname is " + config.getString("akka.remote.netty.tcp.hostname"))
     config.withFallback(ConfigFactory.parseString(builder.toString()))
