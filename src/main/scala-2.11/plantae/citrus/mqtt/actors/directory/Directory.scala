@@ -3,7 +3,7 @@ package plantae.citrus.mqtt.actors.directory
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
-import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
+import akka.cluster.ClusterEvent._
 import akka.cluster._
 import akka.pattern.ask
 import plantae.citrus.mqtt.actors._
@@ -35,14 +35,19 @@ class DirectoryProxy extends Actor with ActorLogging {
   var directoryCluster: Set[ActorSelection] = Set()
   val cluster = Cluster(context.system)
 
-  override def preStart(): Unit = cluster.subscribe(self, classOf[MemberUp])
+  override def preStart(): Unit = cluster.subscribe(self, classOf[MemberUp], classOf[CurrentClusterState]
+    , classOf[UnreachableMember], classOf[ReachableMember], classOf[MemberExited], classOf[MemberRemoved])
 
   override def postStop(): Unit = cluster.unsubscribe(self)
 
   def receive = {
     case state: CurrentClusterState =>
       state.members.filter(_.status == MemberStatus.Up) foreach register
+    case MemberRemoved(m) => unregister(m)
 
+    case MemberExited(m) => unregister(m)
+    case ReachableMember(m) => register(m)
+    case UnreachableMember(m) => unregister(m)
     case MemberUp(m) => register(m)
 
     case request@DirectoryReq(_, TypeSession) =>
@@ -67,6 +72,8 @@ class DirectoryProxy extends Actor with ActorLogging {
   def register(member: Member): Unit =
     directoryCluster = directoryCluster.union(Set(context.actorSelection(RootActorPath(member.address) / "user" / "directory")))
 
+  def unregister(memeber: Member): Unit =
+    directoryCluster = directoryCluster.filter(_ != memeber)
 
 }
 
@@ -82,32 +89,25 @@ sealed trait ClusterAwareData
 
 case class ScatterCount(count: Int) extends ClusterAwareData
 
-case object Uninitialize extends ClusterAwareData
-
 
 class ClusterAwareSessionDirectory(originalSender: ActorRef, cluster: Set[ActorSelection])
   extends FSM[ClusterAwareState, ClusterAwareData] with ActorLogging {
 
-  startWith(Scatter, Uninitialize)
+  startWith(Scatter, null)
 
   when(Scatter) {
     case Event(request: DirectoryReq, _) =>
-      log.info("cluster aware directory create")
       cluster.foreach(_ ! SessionExistRequest(request.name))
       goto(Gather) using ScatterCount(cluster.size)
   }
 
   when(Gather) {
     case Event(SessionExistResponse(sessionId, session), ScatterCount(count)) =>
-      log.info("gather directory create")
 
       session match {
         case Some(x) => originalSender ! DirectorySessionResult(sessionId, x)
-          log.info("get session : {}", x)
           stop(FSM.Shutdown)
         case None =>
-          log.info("move to directory createNew {}", count)
-
           if (count - 1 == 0) {
             cluster.toList(sessionId.hashCode % cluster.size) ! SessionCreateRequest(sessionId)
             goto(CreateNew) using ScatterCount(count - 1)
@@ -117,7 +117,6 @@ class ClusterAwareSessionDirectory(originalSender: ActorRef, cluster: Set[ActorS
 
   when(CreateNew) {
     case Event(SessionCreateResponse(clientId, newActor), ScatterCount(0)) =>
-      log.info("move to directory createNew")
       originalSender ! DirectorySessionResult(clientId, newActor)
       stop(FSM.Shutdown)
   }
@@ -128,11 +127,10 @@ class ClusterAwareSessionDirectory(originalSender: ActorRef, cluster: Set[ActorS
 class ClusterAwareTopicDirectory(originalSender: ActorRef, cluster: Set[ActorSelection])
   extends FSM[ClusterAwareState, ClusterAwareData] with ActorLogging {
 
-  startWith(Scatter, Uninitialize)
+  startWith(Scatter, null)
   when(Scatter) {
 
     case Event(request: DirectoryReq, _) =>
-      log.info("cluster aware directory create")
       cluster.foreach(_ ! TopicExistRequest(request.name))
       goto(Gather) using ScatterCount(cluster.size)
 
@@ -140,14 +138,11 @@ class ClusterAwareTopicDirectory(originalSender: ActorRef, cluster: Set[ActorSel
 
   when(Gather) {
     case Event(TopicExistResponse(sessionId, session), ScatterCount(count)) =>
-      log.info("gather directory create")
 
       session match {
         case Some(x) => originalSender ! DirectoryTopicResult(sessionId, x)
           stop(FSM.Shutdown)
         case None =>
-          log.info("move to directory createNew {}", count)
-
           if (count - 1 == 0) {
             cluster.toList(sessionId.hashCode % cluster.size) ! TopicCreateRequest(sessionId)
             goto(CreateNew) using ScatterCount(count - 1)
@@ -157,8 +152,6 @@ class ClusterAwareTopicDirectory(originalSender: ActorRef, cluster: Set[ActorSel
 
   when(CreateNew) {
     case Event(TopicCreateResponse(clientId, newActor), ScatterCount(0)) =>
-      log.info("move to directory createNew")
-
       originalSender ! DirectoryTopicResult(clientId, newActor)
       stop(FSM.Shutdown)
   }

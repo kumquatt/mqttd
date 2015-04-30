@@ -140,13 +140,13 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
   }
 
   override def preStart {
-    log.info("start publish inbound handler - " + self.path.name)
+    log.debug("start publish inbound handler - " + self.path.name)
     super.preStart
 
   }
 
   override def postStop {
-    log.info("stop publish inbound handler - " + self.path.name)
+    log.debug("stop publish inbound handler - " + self.path.name)
     super.postStop
   }
 

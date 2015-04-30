@@ -4,16 +4,10 @@ import org.eclipse.paho.client.mqttv3._
 
 
 object PublishTest extends App {
-  //  val port = 1883
   val port = 1883
   //  val host = "10.202.32.42"
-  val host = "127.0.0.1"
+  val host = "10.202.32.42"
   val target = "tcp://" + host + ":" + port
-  new Thread() {
-    override def run = {
-
-    }
-  }
   var option1 = new MqttConnectOptions()
   var client1 = new MqttClient(target, "customer1")
   option1.setKeepAliveInterval(100)
@@ -110,10 +104,10 @@ object PublishTest extends App {
 }
 
 object Test3 extends App {
-  val port = 1883
-    val host = "10.202.32.42"
-//  val host = "127.0.0.1"
-  val target = "tcp://" + host + ":" + port
+  val port = 8888
+  //    val host = "10.202.32.42"
+  val host = "10.202.208.200"
+  val target = "tcp://10.202.208.200:" + port
   var option3 = new MqttConnectOptions()
   var client3 = new MqttClient(target, "customer3")
   client3.setCallback(
@@ -135,7 +129,10 @@ object Test3 extends App {
   client3.connect(option3)
   println("client3 => connection complete")
   Thread.sleep(10000)
-  println("client3 => subscribe complete")
   client3.disconnect()
+  while (true) {
+    Thread.sleep(1000)
+  }
+
 
 }
