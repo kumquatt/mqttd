@@ -5,30 +5,17 @@ import org.eclipse.paho.client.mqttv3._
 
 object PublishTest extends App {
   //  val port = 1883
-  val port = 8888
-  new Thread(){
-    override def run ={
+  val port = 1883
+  //  val host = "10.202.32.42"
+  val host = "127.0.0.1"
+  val target = "tcp://" + host + ":" + port
+  new Thread() {
+    override def run = {
 
     }
   }
   var option1 = new MqttConnectOptions()
-  var client1 = new MqttClient("tcp://localhost:" + port, "customer1")
-  client1.setCallback(
-    new MqttCallback {
-      var count = 0
-
-      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {
-
-      }
-
-      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
-        count = count + 1
-        println("[ 1:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
-      }
-
-      override def connectionLost(throwable: Throwable): Unit = {}
-    }
-  )
+  var client1 = new MqttClient(target, "customer1")
   option1.setKeepAliveInterval(100)
   option1.setCleanSession(true)
   client1.connect(option1)
@@ -38,7 +25,7 @@ object PublishTest extends App {
 
 
   var option2 = new MqttConnectOptions()
-  var client2 = new MqttClient("tcp://localhost:" + port, "customer2")
+  var client2 = new MqttClient(target, "customer2")
   client2.setCallback(
     new MqttCallback {
       var count = 0
@@ -63,7 +50,7 @@ object PublishTest extends App {
 
 
   var option3 = new MqttConnectOptions()
-  var client3 = new MqttClient("tcp://localhost:" + port, "customer3")
+  var client3 = new MqttClient(target, "customer3")
   client3.setCallback(
     new MqttCallback {
       var count = 0
@@ -94,23 +81,23 @@ object PublishTest extends App {
     client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)").getBytes(), 0, false)
   }
   )
-//  client3.setCallback(
-//    new MqttCallback {
-//      var count = 0
-//
-//      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
-//
-//      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
-//        count = count + 1
-//        println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
-//      }
-//
-//      override def connectionLost(throwable: Throwable): Unit = {}
-//    }
-//  )
-//  option3.setCleanSession(false)
-//  client3.connect(option3)
-//  println("client3 => connection complete")
+  //  client3.setCallback(
+  //    new MqttCallback {
+  //      var count = 0
+  //
+  //      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
+  //
+  //      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
+  //        count = count + 1
+  //        println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
+  //      }
+  //
+  //      override def connectionLost(throwable: Throwable): Unit = {}
+  //    }
+  //  )
+  //  option3.setCleanSession(false)
+  //  client3.connect(option3)
+  //  println("client3 => connection complete")
 
   Thread.sleep(10000)
   client1.disconnect()
@@ -122,3 +109,33 @@ object PublishTest extends App {
   }
 }
 
+object Test3 extends App {
+  val port = 1883
+    val host = "10.202.32.42"
+//  val host = "127.0.0.1"
+  val target = "tcp://" + host + ":" + port
+  var option3 = new MqttConnectOptions()
+  var client3 = new MqttClient(target, "customer3")
+  client3.setCallback(
+    new MqttCallback {
+      var count = 0
+
+      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
+
+      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
+        count = count + 1
+        println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
+      }
+
+      override def connectionLost(throwable: Throwable): Unit = {}
+    }
+  )
+  option3.setKeepAliveInterval(100)
+  option3.setCleanSession(false)
+  client3.connect(option3)
+  println("client3 => connection complete")
+  Thread.sleep(10000)
+  println("client3 => subscribe complete")
+  client3.disconnect()
+
+}
