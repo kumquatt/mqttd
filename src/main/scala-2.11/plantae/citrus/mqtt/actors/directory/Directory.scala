@@ -43,8 +43,8 @@ class DirectoryProxy extends Actor with ActorLogging {
   def receive = {
     case state: CurrentClusterState =>
       state.members.filter(_.status == MemberStatus.Up) foreach register
-    case MemberRemoved(m) => unregister(m)
 
+    case MemberRemoved(m, _) => unregister(m)
     case MemberExited(m) => unregister(m)
     case ReachableMember(m) => register(m)
     case UnreachableMember(m) => unregister(m)
