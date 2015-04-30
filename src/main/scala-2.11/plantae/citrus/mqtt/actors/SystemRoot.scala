@@ -19,6 +19,7 @@ object SystemRoot {
     if(config.getString("akka.remote.netty.tcp.hostname") == null) {
       builder.append("akka.remote.netty.tcp.hostname = "+InetAddress.getLocalHost().getHostAddress)
     }
+    println("akka.remote.netty.tcp.hostname is " + config.getString("akka.remote.netty.tcp.hostname"))
     config.withFallback(ConfigFactory.parseString(builder.toString()))
   }
   val system = ActorSystem("mqtt", config.getConfig("mqtt"))
