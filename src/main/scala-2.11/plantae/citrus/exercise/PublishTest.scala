@@ -6,7 +6,12 @@ import org.eclipse.paho.client.mqttv3._
 object PublishTest extends App {
   //  val port = 1883
   val port = 8888
-  var option = new MqttConnectOptions()
+  new Thread(){
+    override def run ={
+
+    }
+  }
+  var option1 = new MqttConnectOptions()
   var client1 = new MqttClient("tcp://localhost:" + port, "customer1")
   client1.setCallback(
     new MqttCallback {
@@ -24,9 +29,9 @@ object PublishTest extends App {
       override def connectionLost(throwable: Throwable): Unit = {}
     }
   )
-  option.setKeepAliveInterval(100)
-  option.setCleanSession(true)
-  client1.connect(option)
+  option1.setKeepAliveInterval(100)
+  option1.setCleanSession(true)
+  client1.connect(option1)
   println("client1 => connection complete")
   client1.subscribe(Array("test2"))
   println("client1 => subscribe")

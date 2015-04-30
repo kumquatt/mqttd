@@ -80,7 +80,7 @@ case object CreateNew extends ClusterAwareState
 
 sealed trait ClusterAwareData
 
-case class scatterCount(count: Int) extends ClusterAwareData
+case class ScatterCount(count: Int) extends ClusterAwareData
 
 case object Uninitialize extends ClusterAwareData
 
@@ -89,37 +89,35 @@ class ClusterAwareSessionDirectory(originalSender: ActorRef, cluster: Set[ActorS
   extends FSM[ClusterAwareState, ClusterAwareData] with ActorLogging {
 
   startWith(Scatter, Uninitialize)
-  when(Scatter) {
 
+  when(Scatter) {
     case Event(request: DirectoryReq, _) =>
       log.info("cluster aware directory create")
       cluster.foreach(_ ! SessionExistRequest(request.name))
-      goto(Gather) using scatterCount(cluster.size)
-
+      goto(Gather) using ScatterCount(cluster.size)
   }
 
   when(Gather) {
-    case Event(SessionExistResponse(sessionId, session), scatterCount(count)) =>
+    case Event(SessionExistResponse(sessionId, session), ScatterCount(count)) =>
       log.info("gather directory create")
 
       session match {
         case Some(x) => originalSender ! DirectorySessionResult(sessionId, x)
-          log.info("get session : {}",x)
+          log.info("get session : {}", x)
           stop(FSM.Shutdown)
         case None =>
           log.info("move to directory createNew {}", count)
 
           if (count - 1 == 0) {
             cluster.toList(sessionId.hashCode % cluster.size) ! SessionCreateRequest(sessionId)
-            goto(CreateNew) using scatterCount(count - 1)
-          } else stay using scatterCount(count - 1)
+            goto(CreateNew) using ScatterCount(count - 1)
+          } else stay using ScatterCount(count - 1)
       }
   }
 
   when(CreateNew) {
-    case Event(SessionCreateResponse(clientId, newActor), scatterCount(0)) =>
+    case Event(SessionCreateResponse(clientId, newActor), ScatterCount(0)) =>
       log.info("move to directory createNew")
-
       originalSender ! DirectorySessionResult(clientId, newActor)
       stop(FSM.Shutdown)
   }
@@ -136,12 +134,12 @@ class ClusterAwareTopicDirectory(originalSender: ActorRef, cluster: Set[ActorSel
     case Event(request: DirectoryReq, _) =>
       log.info("cluster aware directory create")
       cluster.foreach(_ ! TopicExistRequest(request.name))
-      goto(Gather) using scatterCount(cluster.size)
+      goto(Gather) using ScatterCount(cluster.size)
 
   }
 
   when(Gather) {
-    case Event(TopicExistResponse(sessionId, session), scatterCount(count)) =>
+    case Event(TopicExistResponse(sessionId, session), ScatterCount(count)) =>
       log.info("gather directory create")
 
       session match {
@@ -152,13 +150,13 @@ class ClusterAwareTopicDirectory(originalSender: ActorRef, cluster: Set[ActorSel
 
           if (count - 1 == 0) {
             cluster.toList(sessionId.hashCode % cluster.size) ! TopicCreateRequest(sessionId)
-            goto(CreateNew) using scatterCount(count - 1)
-          } else stay using scatterCount(count - 1)
+            goto(CreateNew) using ScatterCount(count - 1)
+          } else stay using ScatterCount(count - 1)
       }
   }
 
   when(CreateNew) {
-    case Event(TopicCreateResponse(clientId, newActor), scatterCount(0)) =>
+    case Event(TopicCreateResponse(clientId, newActor), ScatterCount(0)) =>
       log.info("move to directory createNew")
 
       originalSender ! DirectoryTopicResult(clientId, newActor)
@@ -167,23 +165,3 @@ class ClusterAwareTopicDirectory(originalSender: ActorRef, cluster: Set[ActorSel
 
   initialize()
 }
-
-//class LocalDirectory extends Actor with ActorLogging {
-//  implicit val timeout = akka.util.Timeout(2, TimeUnit.SECONDS)
-//  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
-//
-//  def receive = {
-//    case DirectoryReq(name, actorType) => {
-//      actorType match {
-//        case TypeSession =>
-//          sender ! DirectorySessionResult(name,
-//            Await.result(
-//              SystemRoot.sessionRoot ? name, Duration.Inf).asInstanceOf[ActorRef])
-//        case TypeTopic =>
-//          sender ! DirectoryTopicResult(name,
-//            Await.result(
-//              SystemRoot.topicRoot ? name, Duration.Inf).asInstanceOf[List[ActorRef]])
-//      }
-//    }
-//  }
-//}

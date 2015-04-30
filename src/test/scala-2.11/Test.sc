@@ -1,8 +1,22 @@
+import java.io.File
 
-val a = List(List(1,2,3), List(2), List(3))
+import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
+import com.typesafe.config.{ConfigParseOptions, ConfigFactory}
+import plantae.citrus.mqtt.actors.directory.{DirectorySessionResult, DirectoryReq, TypeSession}
 
-a.flatten
+new File("hello").getAbsolutePath
+val config = ConfigFactory.load(ConfigFactory.parseFile(new File("/Users/yinjae/IdealProjects/dev/kumquatt/src/test/resources/application.conf")))
 
-val b = List(1, null, 2, 3)
+config.getConfig("mqtt")
 
-b.filter(x => x != null)
+val system = ActorSystem("mqtt", config)
+
+system.actorOf(Props(new Actor with ActorLogging {
+  override def receive: Receive = {
+    case str: String =>
+      context.actorSelection("akka.tcp://mqtt@127.0.0.1:30000/user/directory") ! DirectoryReq(str, TypeSession)
+    case DirectorySessionResult(name, ref) =>
+      log.info("receive name:{} ref : {}" ,name, ref )
+  }
+})) ! "testSession1"
+
