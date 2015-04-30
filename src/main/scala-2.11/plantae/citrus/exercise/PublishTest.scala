@@ -79,32 +79,33 @@ object PublishTest extends App {
   println("client3 => connection complete")
 
   client3.subscribe(Array("test2"))
+  Thread.sleep(1000)
   println("client3 => subscribe complete")
   client3.disconnect()
 
 
-  Range(1, 3000).foreach(count => {
+  Range(1, 100).foreach(count => {
     println("publish " + count)
     client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)").getBytes(), 0, false)
   }
   )
-  client3.setCallback(
-    new MqttCallback {
-      var count = 0
-
-      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
-
-      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
-        count = count + 1
-        println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
-      }
-
-      override def connectionLost(throwable: Throwable): Unit = {}
-    }
-  )
-  option3.setCleanSession(true)
-  client3.connect(option3)
-  println("client3 => connection complete")
+//  client3.setCallback(
+//    new MqttCallback {
+//      var count = 0
+//
+//      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
+//
+//      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
+//        count = count + 1
+//        println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
+//      }
+//
+//      override def connectionLost(throwable: Throwable): Unit = {}
+//    }
+//  )
+//  option3.setCleanSession(false)
+//  client3.connect(option3)
+//  println("client3 => connection complete")
 
   Thread.sleep(10000)
   client1.disconnect()

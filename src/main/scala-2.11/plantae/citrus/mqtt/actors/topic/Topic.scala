@@ -23,6 +23,15 @@ case class TopicOutMessage(payload: Array[Byte], qos: Short, retain: Boolean, to
 
 case object TopicOutMessageAck extends TopicRequest
 
+case class TopicCreateRequest(topicName: String)
+
+case class TopicCreateResponse(topicName: String, topic: List[ActorRef])
+
+case class TopicExistRequest(topicName: String)
+
+case class TopicExistResponse(topicName: String, topic: Option[List[ActorRef]])
+
+
 class TopicRoot extends Actor with ActorLogging {
 
   val root = DiskTreeNode[ActorRef]("", "", Map[String, DiskTreeNode[ActorRef]]())
@@ -37,14 +46,30 @@ class TopicRoot extends Actor with ActorLogging {
           sender ! List(topic)
         }
         case topics: List[ActorRef] => sender ! topics
-
       }
-      //      context.child(topicName) match {
-      //        case Some(x) => sender ! x
-      //        case None => log.debug("new topic is created [{}]", topicName)
-      //          sender ! context.actorOf(Props[Topic], topicName)
-      //      }
     }
+    case TopicCreateRequest(topicName) =>
+      root.getNodes(topicName) match {
+        case Nil =>
+          val topic = context.actorOf(Props(classOf[Topic], topicName), Random.alphanumeric.take(128).mkString)
+          root.addNode(topicName, topic)
+          sender ! TopicCreateResponse(topicName, List(topic))
+        case topics: List[ActorRef] => sender ! TopicCreateResponse(topicName, topics)
+      }
+
+
+    case TopicExistRequest(topicName) =>
+      sender ! TopicExistResponse(topicName, root.getNodes(topicName) match {
+        case Nil => None
+        case topics: List[ActorRef] => Some(topics)
+      })
+
+
+    //      context.child(topicName) match {
+    //        case Some(x) => sender ! x
+    //        case None => log.debug("new topic is created [{}]", topicName)
+    //          sender ! context.actorOf(Props[Topic], topicName)
+    //      }
   }
 }
 
@@ -79,7 +104,8 @@ class Topic(name: String) extends Actor with ActorLogging {
       sender ! TopicInMessageAck
       subscriberMap.values.foreach(
         (actor) => {
-          actor ! TopicOutMessage(payload, qos, retain, name)}
+          actor ! TopicOutMessage(payload, qos, retain, name)
+        }
       )
     }
     case TopicOutMessageAck =>
@@ -91,10 +117,10 @@ class Topic(name: String) extends Actor with ActorLogging {
   }
 }
 
-case class DiskTreeNode[A](name: String, fullPath: String, children: Map[String, DiskTreeNode[A]] = Map[String, DiskTreeNode[A]]()){
+case class DiskTreeNode[A](name: String, fullPath: String, children: Map[String, DiskTreeNode[A]] = Map[String, DiskTreeNode[A]]()) {
   var topic: Option[A] = None
 
-  def pathToList(path: String) : List[String] = {
+  def pathToList(path: String): List[String] = {
     path.split("/").toList
   }
 
@@ -111,7 +137,7 @@ case class DiskTreeNode[A](name: String, fullPath: String, children: Map[String,
             node.addNode(paths.tail, path, topic)
           }
           case None => {
-            val node = new DiskTreeNode[A](paths.head, fullPath +"/" +paths.head)
+            val node = new DiskTreeNode[A](paths.head, fullPath + "/" + paths.head)
             node.addNode(paths.tail, path, topic)
             children.+=((paths.head, node))
           }
@@ -127,9 +153,9 @@ case class DiskTreeNode[A](name: String, fullPath: String, children: Map[String,
   }
 
   def removeNode(paths: List[String]): Boolean = {
-    if(paths.size == 1){
+    if (paths.size == 1) {
       children.-(paths.head)
-    } else if(paths.size > 1) {
+    } else if (paths.size > 1) {
       children.get(paths.head) match {
         case Some(node: DiskTreeNode[A]) => {
           node.removeNode(paths.tail)
@@ -145,7 +171,7 @@ case class DiskTreeNode[A](name: String, fullPath: String, children: Map[String,
     getNodes(pathToList(path))
   }
 
-  def getNodes(paths: List[String]) : List[A] = {
+  def getNodes(paths: List[String]): List[A] = {
     paths match {
       case Nil => List()
       case x :: Nil => {
@@ -156,7 +182,7 @@ case class DiskTreeNode[A](name: String, fullPath: String, children: Map[String,
           }
           case _ => {
             children.get(x) match {
-              case Some(node:DiskTreeNode[A]) => {
+              case Some(node: DiskTreeNode[A]) => {
                 node.topic match {
                   case Some(t) => List(t)
                   case None => List()

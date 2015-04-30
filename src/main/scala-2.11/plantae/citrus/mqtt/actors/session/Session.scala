@@ -24,6 +24,14 @@ case class MQTTOutboundPacket(mqttPacket: Packet)
 
 sealed trait SessionRequest
 
+case class SessionCreateRequest(clientId: String)
+
+case class SessionCreateResponse(clientId: String, session: ActorRef)
+
+case class SessionExistRequest(clientId: String)
+
+case class SessionExistResponse(clientId: String, session: Option[ActorRef])
+
 case object SessionKeepAliveTimeOut extends SessionRequest
 
 case object ClientCloseConnection extends SessionRequest
@@ -37,6 +45,18 @@ class SessionRoot extends Actor with ActorLogging {
           sender ! context.actorOf(Props[Session], clientId)
       }
     }
+
+    case SessionCreateRequest(clientId: String) => {
+      context.child(clientId) match {
+        case Some(x) => sender ! x
+        case None => log.debug("new session is created [{}]", clientId)
+          sender ! SessionCreateResponse(clientId, context.actorOf(Props[Session], clientId))
+      }
+    }
+
+    case SessionExistRequest(clientId) =>
+      sender ! SessionExistResponse(clientId, context.child(clientId))
+
   }
 }
 
