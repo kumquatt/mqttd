@@ -25,7 +25,7 @@ class Storage(sessionName: String) extends Serializable {
   case class ChunkMessage(var location: Location, var readyMessages: List[ReadyMessage]) {
     def serialize = {
       try {
-        val directory = new File("data/" + sessionName + "/" + (new SimpleDateFormat("yyyy/MM/dd").format(new Date())))
+        val directory = new File(SystemRoot.config.getString("mqtt.broker.session.storeDir") + "/" + sessionName + "/" + (new SimpleDateFormat("yyyy/MM/dd").format(new Date())))
         directory.mkdirs()
         val path: String = directory.getAbsolutePath + "/" + UUID.randomUUID().toString
         val outputStreamer = new ObjectOutputStream(new FileOutputStream(path))

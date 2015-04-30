@@ -1,5 +1,7 @@
 package plantae.citrus.mqtt.actors
 
+import java.net.InetAddress
+
 import akka.actor._
 import com.typesafe.config.ConfigFactory
 import plantae.citrus.mqtt.actors.directory._
@@ -10,11 +12,20 @@ import plantae.citrus.mqtt.actors.topic.TopicRoot
  * Created by yinjae on 15. 4. 21..
  */
 object SystemRoot {
-  val system = ActorSystem("mqtt", ConfigFactory.load.getConfig("mqtt"))
+
+  val config = {
+    val config = ConfigFactory.load()
+    val builder = new StringBuilder
+    if(config.getString("akka.remote.netty.tcp.hostname") == null) {
+      builder.append("akka.remote.netty.tcp.hostname = "+InetAddress.getLocalHost().getHostAddress)
+    }
+    config.withFallback(ConfigFactory.parseString(builder.toString()))
+  }
+  val system = ActorSystem("mqtt", config.getConfig("mqtt"))
   val sessionRoot = system.actorOf(Props[SessionRoot], "session")
   val topicRoot = system.actorOf(Props[TopicRoot], "topic")
   val directoryProxy = system.actorOf(Props[DirectoryProxy], "directory")
-  val config = ConfigFactory.load()
+
 
   def directoryOperation(x: DirectoryOperation, senderContext: ActorContext, originalSender: ActorRef) = {
     implicit val context: ActorContext = senderContext
