@@ -111,7 +111,7 @@ class Storage(sessionName: String) extends Serializable {
 
   def nextMessage: Option[PUBLISH] = {
 
-    if (workQueue.size > 0) {
+    if (workQueue.size > 10) {
       None
     } else popFirstMessage match {
       case Some(message) =>
@@ -142,8 +142,8 @@ class Storage(sessionName: String) extends Serializable {
 
   private def nextPacketId = {
     packetIdGenerator = {
-      if (packetIdGenerator < 0)
-        0
+      if ((packetIdGenerator +1) < 0)
+        10
       else (packetIdGenerator + 1).toShort
     }
     packetIdGenerator

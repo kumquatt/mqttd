@@ -91,7 +91,7 @@ object PublishTest extends App {
   Range(1, 100000).foreach(count => {
     if (count % 100 == 0)
       println("publish " + count)
-    client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)").getBytes(), 0, false)
+    client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)").getBytes(), 1, false)
   }
   )
   //  client3.setCallback(

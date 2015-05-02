@@ -176,14 +176,15 @@ class Session extends Actor with ActorLogging {
         val actorName = outboundActorName(mqtt.packetId.value.toString)
         context.child(actorName) match {
           case Some(x) => x ! mqtt
-          case None => log.error("[PUBACK] can't find publish outbound actor {}", actorName)
+          case None => log.error("[PUBACK] can't find publish outbound actor {} current child actors : {} packetId : {}", actorName ,
+          context.children.foldLeft(List[String]())((x,y) => {x:+y.path.name}), mqtt.packetId)
         }
 
       case mqtt: PUBCOMB =>
         val actorName = outboundActorName(mqtt.packetId.value.toString)
         context.child(actorName) match {
           case Some(x) => x ! mqtt
-          case None => log.error("[PUBCOMB] can't find publish outbound actor {}", actorName)
+          case None => log.error("[PUBCOMB] can't find publish outbound actor {} ", actorName)
         }
 
       case DISCONNECT => {
