@@ -72,8 +72,8 @@ class DirectoryProxy extends Actor with ActorLogging {
   def register(member: Member): Unit =
     directoryCluster = directoryCluster.union(Set(context.actorSelection(RootActorPath(member.address) / "user" / "directory")))
 
-  def unregister(memeber: Member): Unit =
-    directoryCluster = directoryCluster.filter(_ != memeber)
+  def unregister(member: Member): Unit =
+    directoryCluster = directoryCluster.filter(_ != member)
 
 }
 

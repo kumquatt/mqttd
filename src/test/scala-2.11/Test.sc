@@ -1,22 +1,26 @@
-import java.io.File
+import java.net.{InetAddress, NetworkInterface}
 
-import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
-import com.typesafe.config.{ConfigParseOptions, ConfigFactory}
-import plantae.citrus.mqtt.actors.directory.{DirectorySessionResult, DirectoryReq, TypeSession}
+InetAddress.getLocalHost.getHostAddress
 
-new File("hello").getAbsolutePath
-val config = ConfigFactory.load(ConfigFactory.parseFile(new File("/Users/yinjae/IdealProjects/dev/kumquatt/src/test/resources/application.conf")))
-
-config.getConfig("mqtt")
-
-val system = ActorSystem("mqtt", config)
-
-system.actorOf(Props(new Actor with ActorLogging {
-  override def receive: Receive = {
-    case str: String =>
-      context.actorSelection("akka.tcp://mqtt@127.0.0.1:30000/user/directory") ! DirectoryReq(str, TypeSession)
-    case DirectorySessionResult(name, ref) =>
-      log.info("receive name:{} ref : {}" ,name, ref )
+val en = NetworkInterface.getNetworkInterfaces();
+while (en.hasMoreElements()) {
+  val ni = en.nextElement()
+  val ee = ni.getInetAddresses();
+  while (ee.hasMoreElements()) {
+    val ia = ee.nextElement();
+    System.out.println(ia.getHostAddress());
   }
-})) ! "testSession1"
+}
+
+
+
+InetAddress.getAllByName(InetAddress.getLocalHost().getCanonicalHostName()) match {
+  case null => "127.0.0.1"
+  case Array() => "127.0.0.1"
+  case hostNames: Array[InetAddress] => hostNames.filterNot(x => x.getHostAddress.equals("127.0.0.1")) match {
+    case Array() => "127.0.0.1"
+    case other: Array[InetAddress] => other(0).getHostAddress
+  }
+}
+
 

@@ -159,27 +159,31 @@ class Session extends Actor with ActorLogging {
       }
 
       case mqtt: PUBREL =>
-        context.child(inboundActorName(mqtt.packetId.value.toString)) match {
+        val actorName = inboundActorName(mqtt.packetId.value.toString)
+        context.child(actorName) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish inbound actor {}", inboundActorName(mqtt.packetId.value.toString))
+          case None => log.error("[PUBREL] can't find publish inbound actor {}", actorName)
         }
 
       case mqtt: PUBREC =>
-        context.child(outboundActorName(mqtt.packetId.value.toString)) match {
+        val actorName = outboundActorName(mqtt.packetId.value.toString)
+        context.child(actorName) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId.value.toString))
+          case None => log.error("[PUBREC] can't find publish outbound actor {}", actorName)
         }
 
       case mqtt: PUBACK =>
-        context.child(outboundActorName(mqtt.packetId.value.toString)) match {
+        val actorName = outboundActorName(mqtt.packetId.value.toString)
+        context.child(actorName) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId.value.toString))
+          case None => log.error("[PUBACK] can't find publish outbound actor {}", actorName)
         }
 
       case mqtt: PUBCOMB =>
-        context.child(outboundActorName(mqtt.packetId.value.toString)) match {
+        val actorName = outboundActorName(mqtt.packetId.value.toString)
+        context.child(actorName) match {
           case Some(x) => x ! mqtt
-          case None => log.error("can't find publish outbound actor {}", outboundActorName(mqtt.packetId.value.toString))
+          case None => log.error("[PUBCOMB] can't find publish outbound actor {}", actorName)
         }
 
       case DISCONNECT => {
@@ -218,13 +222,14 @@ class Session extends Actor with ActorLogging {
 
   def unsubscribeTopics(topics: List[STRING]) = {
     topics.foreach(x => {
-      SystemRoot.invokeCallback(DirectoryReq(x.value, TypeTopic), context, Props(new Actor {
+      SystemRoot.directoryProxy.tell(DirectoryReq(x.value, TypeTopic), context.actorOf(Props(new Actor {
         def receive = {
           case DirectoryTopicResult(name, topicActors) =>
             topicActors.foreach(actor => actor ! Unsubscribe(self.path.name))
           //          topicActor != UNSUBSCRIBE
         }
-      }))
+      })))
+
     }
     )
 

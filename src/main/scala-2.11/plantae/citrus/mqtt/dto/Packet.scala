@@ -1,5 +1,6 @@
 package plantae.citrus.mqtt.dto
 
+import plantae.citrus.mqtt.dto.Decoder.ByteStream
 import plantae.citrus.mqtt.dto.connect._
 import plantae.citrus.mqtt.dto.ping.PINGREQDecoder
 import plantae.citrus.mqtt.dto.publish._
@@ -74,7 +75,28 @@ case object ControlPacketType {
 }
 
 object PacketDecoder {
-  def decode(data: Array[Byte]): List[Packet] = {
+
+  def decode(data: Array[Byte]): (List[Packet], Array[Byte]) = {
+    if (data.length < 4) (List(), data)
+    else {
+      val byteStream = ByteStream(data)
+      Decoder.decodeBYTE(byteStream)
+      val remainingBytes = Decoder.decodeREMAININGLENGTH(byteStream)
+      val bytesForPacket = (1 + remainingBytes.usedByte + remainingBytes.value)
+      if (bytesForPacket <= data.length) {
+        val rest = data.drop(1 + remainingBytes.usedByte + remainingBytes.value)
+        val packet = decodePacket(data.take(1 + remainingBytes.usedByte + remainingBytes.value))
+        val restPacket = decode(rest)
+        (List(packet) ++ restPacket._1, restPacket._2)
+      } else {
+        (List(), data)
+      }
+    }
+
+  }
+
+  def decodePacket(data: Array[Byte]): Packet = {
+
     val packet = BYTE(data(0)) & BYTE(0xF0.toByte) match {
       case ControlPacketType.CONNECT => CONNECTDecoder.decode(data)
       case ControlPacketType.PINGREQ => PINGREQDecoder.decode(data)
@@ -87,9 +109,6 @@ object PacketDecoder {
       case ControlPacketType.SUBSCRIBE => SUBSCRIBEDecoder.decode(data)
       case ControlPacketType.UNSUBSCRIBE => UNSUBSCRIBEDecoder.decode(data)
     }
-    List(packet) ++ {
-      if (packet.fixedHeader.remainLegnth.value + packet.fixedHeader.usedByte == data.length) List()
-      else decode(data.drop(packet.fixedHeader.remainLegnth.value + packet.fixedHeader.usedByte))
-    }
+    packet
   }
 }

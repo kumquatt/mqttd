@@ -36,7 +36,7 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
   def handleWill = {
     will match {
       case Some(x) =>
-        SystemRoot.invokeCallback(DirectoryReq(x.topic.value, TypeTopic), sessionContext, Props(new Actor {
+        SystemRoot.directoryProxy.tell(DirectoryReq(x.topic.value, TypeTopic), sessionContext.actorOf(Props(new Actor {
           def receive = {
             case DirectorySessionResult(name, actor) =>
               val topicInMessage = TopicInMessage(x.message.value.getBytes, (x.qos >> 3 & BYTE(0x03.toByte)).value.toShort, x.retain, x.qos.value.toShort match {
@@ -46,7 +46,8 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
               actor.tell(topicInMessage, ActorRef.noSender)
           }
         }
-        ))
+        )))
+
       case None =>
     }
   }

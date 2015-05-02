@@ -25,13 +25,15 @@ case class SessionCreateContainer(bridge: ActorRef, send: Packet) extends Bridge
 
 case class BridgeContainer(session: ActorRef, bridge: ActorRef) extends BridgeData
 
+case class RestByteContainer(session: ActorRef, bridge: ActorRef, remainingBytes: Array[Byte]) extends BridgeData
+
 class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with ActorLogging {
   startWith(ConnectionWaitConnect, SessionCreateContainer(self, null))
 
   when(ConnectionWaitConnect) {
     case Event(Received(data), container: SessionCreateContainer) =>
       PacketDecoder.decode(data.toArray) match {
-        case (head: CONNECT) :: Nil =>
+        case ((head: CONNECT) :: Nil, _) =>
           SystemRoot.directoryProxy.tell(DirectoryReq(head.clientId.value, TypeSession),
             context.actorOf(Props(new Actor with ActorLogging {
               def receive = {
@@ -69,27 +71,29 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
   when(ConnectionForwardConnAct) {
     case Event(MQTTOutboundPacket(connAck: CONNACK), container: BridgeContainer) =>
       socket ! Write(ByteString(connAck.encode))
-      goto(ConnectionEstablished) using container
+      goto(ConnectionEstablished) using new RestByteContainer(container.session, container.bridge, Array())
   }
 
   when(ConnectionEstablished) {
-    case Event(MQTTOutboundPacket(packet: Packet), container: BridgeContainer) =>
+    case Event(MQTTOutboundPacket(packet: Packet), container: RestByteContainer) =>
       socket ! Write(ByteString(packet.encode))
       stay using container
 
-    case Event(DISCONNECT, container: BridgeContainer) =>
+    case Event(DISCONNECT, container: RestByteContainer) =>
       container.session ! MQTTInboundPacket(DISCONNECT)
       stop(FSM.Shutdown)
 
-    case Event(packet: Packet, container: BridgeContainer) =>
+    case Event(packet: Packet, container: RestByteContainer) =>
       container.session ! MQTTInboundPacket(packet)
       stay using container
 
-    case Event(Received(data), container: BridgeContainer) =>
-      PacketDecoder.decode(data.toArray).foreach(container.bridge ! _)
-      stay using container
+    case Event(Received(data), container: RestByteContainer) =>
+      val decodeResult = PacketDecoder.decode((container.remainingBytes ++ data.toArray[Byte]))
+      decodeResult._1.foreach(container.bridge ! _)
+      stay using new RestByteContainer(container.session, container.bridge, decodeResult._2)
 
-    case Event(PeerClosed, container: BridgeContainer) =>
+
+    case Event(PeerClosed, container: RestByteContainer) =>
       container.session ! ClientCloseConnection
       stop(FSM.Shutdown)
   }

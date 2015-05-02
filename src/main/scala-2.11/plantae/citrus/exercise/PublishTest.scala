@@ -4,17 +4,33 @@ import org.eclipse.paho.client.mqttv3._
 
 
 object PublishTest extends App {
-  val port = 1883
+  val port = 8888
   //  val host = "10.202.32.42"
-  val host = "10.202.32.42"
+  val host = "127.0.0.1"
   val target = "tcp://" + host + ":" + port
   var option1 = new MqttConnectOptions()
   var client1 = new MqttClient(target, "customer1")
   option1.setKeepAliveInterval(100)
   option1.setCleanSession(true)
+  client1.setCallback(
+    new MqttCallback {
+      var count = 0
+
+      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
+
+      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
+        count = count + 1
+        if (count % 100 == 0)
+          println("[ 1:" + count + " ]\tqos : "+ mqttMessage.getQos + "\tmessage:" + new String(mqttMessage.getPayload))
+      }
+
+      override def connectionLost(throwable: Throwable): Unit = {}
+    }
+  )
+
   client1.connect(option1)
   println("client1 => connection complete")
-  client1.subscribe(Array("test2"))
+  client1.subscribe(("test2"),0)
   println("client1 => subscribe")
 
 
@@ -28,7 +44,8 @@ object PublishTest extends App {
 
       override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
         count = count + 1
-        println("[ 2:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
+        if (count % 100 == 0)
+          println("[ 2:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
       }
 
       override def connectionLost(throwable: Throwable): Unit = {}
@@ -39,7 +56,7 @@ object PublishTest extends App {
   client2.connect(option2)
   println("client2 => connection complete")
 
-  client2.subscribe(Array("test2"))
+  client2.subscribe(("test2"),0)
   println("client2 => subscribe complete")
 
 
@@ -53,7 +70,8 @@ object PublishTest extends App {
 
       override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
         count = count + 1
-        println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
+        if (count % 100 == 0)
+          println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
       }
 
       override def connectionLost(throwable: Throwable): Unit = {}
@@ -64,14 +82,15 @@ object PublishTest extends App {
   client3.connect(option3)
   println("client3 => connection complete")
 
-  client3.subscribe(Array("test2"))
+  client3.subscribe(("test2"),0)
   Thread.sleep(1000)
   println("client3 => subscribe complete")
   client3.disconnect()
 
 
-  Range(1, 100).foreach(count => {
-    println("publish " + count)
+  Range(1, 100000).foreach(count => {
+    if (count % 100 == 0)
+      println("publish " + count)
     client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)").getBytes(), 0, false)
   }
   )
@@ -93,7 +112,7 @@ object PublishTest extends App {
   //  client3.connect(option3)
   //  println("client3 => connection complete")
 
-  Thread.sleep(10000)
+  Thread.sleep(100000)
   client1.disconnect()
   println("client1 => disconnection complete")
 

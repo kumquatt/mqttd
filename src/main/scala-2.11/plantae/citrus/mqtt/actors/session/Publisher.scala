@@ -155,8 +155,7 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
   when(WaitPublish) {
     case Event(publish: PUBLISH, _) =>
       log.debug(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
-
-      SystemRoot.invokeCallback(DirectoryReq(publish.topic.value, TypeTopic), context, Props(new Actor {
+      SystemRoot.directoryProxy.tell(DirectoryReq(publish.topic.value, TypeTopic), context.actorOf(Props(new Actor {
         def receive = {
           case DirectoryTopicResult(name, actors) =>
             actors.foreach(actor =>
@@ -168,11 +167,10 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
                   }
                 ), publishActor)
             )
+//            context.stop(self)
         }
       }
-      )
-      )
-
+      )))
       publish.qos.value match {
         case 0 => goto(WaitTopicResponseQos0)
         case 1 => goto(WaitTopicResponseQos1)

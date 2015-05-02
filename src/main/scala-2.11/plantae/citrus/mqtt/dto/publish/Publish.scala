@@ -104,7 +104,13 @@ object PUBLISHDecoder {
         case None => 0
       }
     })
-    PUBLISH((typeAndFlag & dupBit).toBoolean, ((typeAndFlag & qosBit) >> 1).toINT, (typeAndFlag & retainBit).toBoolean, topic, packetId, payload)
+
+    val publish = PUBLISH((typeAndFlag & dupBit).toBoolean, ((typeAndFlag & qosBit) >> 1).toINT, (typeAndFlag & retainBit).toBoolean, topic, packetId, payload)
+    if (remainingLength.value != publish.variableHeader.usedByte + publish.payload.usedByte) {
+      println("header said " + remainingLength.value + " but real size is " +(publish.variableHeader.usedByte + publish.payload.usedByte))
+      throw new Error
+    }
+    publish
   }
 }
 
@@ -116,8 +122,6 @@ object PUBACKDecoder {
     if (typeAndFlag != BYTE(0x40)) throw new Error
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
     val packetId = Decoder.decodeINT(stream)
-    if (remainingLength.value != packetId.usedByte)
-      throw new Error
     PUBACK(packetId)
   }
 
@@ -130,8 +134,6 @@ object PUBRECDecoder {
     if (typeAndFlag != BYTE(0x50)) throw new Error
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
     val packetId = Decoder.decodeINT(stream)
-    if (remainingLength.value != packetId.usedByte)
-      throw new Error
     PUBREC(packetId)
   }
 
@@ -141,11 +143,12 @@ object PUBRELDecoder {
   def decode(bytes: Array[Byte]): PUBREL = {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
-    if (typeAndFlag != BYTE(0x62.toByte)) throw new Error
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
-    val packetId = Decoder.decodeINT(stream)
-    if (remainingLength.value != packetId.usedByte)
+    if (typeAndFlag != BYTE(0x62.toByte)) {
+      println("expected is " + BYTE(0x62).hexa + " but real is " + (typeAndFlag).hexa)
       throw new Error
+    }
+    val packetId = Decoder.decodeINT(stream)
     PUBREL(packetId)
   }
 
@@ -156,9 +159,11 @@ object PUBCOMBDecoder {
     val stream = ByteStream(bytes)
     val typeAndFlag = Decoder.decodeBYTE(stream)
     val remainingLength = Decoder.decodeREMAININGLENGTH(stream)
-    if (typeAndFlag != BYTE(0x70)) throw new Error
+    if (typeAndFlag != BYTE(0x70)) {
+      println("expected is " + BYTE(0x70).hexa + " but real is " + (typeAndFlag).hexa + " : " + bytes.length + " " + new String(bytes))
+      throw new Error
+    }
     val packetId = Decoder.decodeINT(stream)
-    if (remainingLength.value != packetId.usedByte) throw new Error
     PUBCOMB(packetId)
   }
 
