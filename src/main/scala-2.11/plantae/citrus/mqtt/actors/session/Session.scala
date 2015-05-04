@@ -15,9 +15,6 @@ import plantae.citrus.mqtt.dto.publish._
 import plantae.citrus.mqtt.dto.subscribe.{SUBACK, SUBSCRIBE, TopicFilter}
 import plantae.citrus.mqtt.dto.unsubscribe.{UNSUBACK, UNSUBSCRIBE}
 
-import scala.concurrent.Await
-import scala.concurrent.duration.Duration
-
 case class MQTTInboundPacket(mqttPacket: Packet)
 
 case class MQTTOutboundPacket(mqttPacket: Packet)
@@ -218,15 +215,19 @@ class Session extends Actor with ActorLogging {
   }
 
   def subscribeTopics(topicFilters: List[TopicFilter]): List[BYTE] = {
-    val result = topicFilters.map(tp =>
-      Await.result(SystemRoot.directoryProxy ? DirectoryReq(tp.topic.value, TypeTopic), Duration.Inf) match {
-        case DirectoryTopicResult(topicName, options) =>
-          options.foreach(actor => actor ! Subscribe(self.path.name))
-          //          option ! Subscribe(self.path.name)
-          BYTE(0x00)
-      }
+    topicFilters.map(tp => {
+      context.actorOf(Props(new Actor with ActorLogging {
+        override def receive = {
+          case request: DirectoryReq =>
+            SystemRoot.directoryProxy ? request
+          case DirectoryTopicResult(topicName, options) =>
+            options.foreach(actor => actor ! Subscribe(self.path.name))
+            context.stop(self)
+        }
+      })) ! DirectoryReq(tp.topic.value, TypeTopic)
+      BYTE(0x00)
+    }
     )
-    result
   }
 
   def unsubscribeTopics(topics: List[STRING]) = {
