@@ -82,14 +82,16 @@ class Topic(name: String) extends Actor with ActorLogging {
     //    }
     case Subscribe(clientId) => {
       log.debug("Subscribe client({}) topic({})", clientId, name)
-      subscriberMap.+=((clientId, sender))
+      if (!subscriberMap.exists(each => each._1.equals(clientId) && each._2 == sender))
+        subscriberMap.+=((clientId, sender))
       //      context.watch(sender())
       printEverySubscriber
     }
 
     case Unsubscribe(clientId) => {
       log.debug("Unsubscribe client({}) topic({})", clientId, name)
-      subscriberMap.-(clientId)
+      if (!subscriberMap.exists(each => each._1.equals(clientId)))
+        subscriberMap.-(clientId)
       printEverySubscriber
     }
 

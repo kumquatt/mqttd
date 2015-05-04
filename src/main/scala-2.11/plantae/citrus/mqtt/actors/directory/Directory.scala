@@ -38,6 +38,7 @@ class DirectoryProxy extends Actor with ActorLogging {
 
   override def postStop(): Unit = cluster.unsubscribe(self)
 
+
   def receive = {
     case state: CurrentClusterState =>
       state.members.filter(_.status == MemberStatus.Up) foreach register
@@ -55,22 +56,20 @@ class DirectoryProxy extends Actor with ActorLogging {
       context.actorOf(Props(classOf[ClusterAwareTopicDirectory], sender, directoryCluster)) ! request
 
     case request: SessionExistRequest =>
-      val originalSender = sender;
+      val originalSender = sender
       context.actorOf(Props(new Actor with ActorLogging {
         override def receive = {
-          case request: SessionExistRequest =>
-            SystemRoot.sessionRoot ! request
+          case request: SessionExistRequest => SystemRoot.sessionRoot ! request
           case response: SessionExistResponse => originalSender ! response
             context.stop(self)
         }
       })) ! request
 
     case request: SessionCreateRequest =>
-      val originalSender = sender;
+      val originalSender = sender
       context.actorOf(Props(new Actor with ActorLogging {
         override def receive = {
-          case request: SessionCreateRequest =>
-            SystemRoot.sessionRoot ! request
+          case request: SessionCreateRequest => SystemRoot.sessionRoot ! request
           case response: SessionCreateResponse => originalSender ! response
             context.stop(self)
         }
@@ -78,11 +77,10 @@ class DirectoryProxy extends Actor with ActorLogging {
 
 
     case request: TopicExistRequest =>
-      val originalSender = sender;
+      val originalSender = sender
       context.actorOf(Props(new Actor with ActorLogging {
         override def receive = {
-          case request: TopicExistRequest =>
-            SystemRoot.topicRoot ! request
+          case request: TopicExistRequest => SystemRoot.topicRoot ! request
           case response: TopicExistResponse => originalSender ! response
             context.stop(self)
         }
@@ -90,11 +88,10 @@ class DirectoryProxy extends Actor with ActorLogging {
 
 
     case request: TopicCreateRequest =>
-      val originalSender = sender;
+      val originalSender = sender
       context.actorOf(Props(new Actor with ActorLogging {
         override def receive = {
-          case request: TopicCreateRequest =>
-            SystemRoot.topicRoot ! request
+          case request: TopicCreateRequest => SystemRoot.topicRoot ! request
           case response: TopicCreateResponse => originalSender ! response
             context.stop(self)
         }

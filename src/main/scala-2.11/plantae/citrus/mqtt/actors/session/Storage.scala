@@ -4,6 +4,7 @@ import java.io._
 import java.text.SimpleDateFormat
 import java.util.{Date, UUID}
 
+import akka.actor.ActorRef
 import com.google.common.base.Throwables
 import org.slf4j.LoggerFactory
 import plantae.citrus.mqtt.actors.SystemRoot
@@ -35,8 +36,7 @@ class Storage(sessionName: String) extends Serializable {
         readyMessages = List()
       } catch {
         case t: Throwable => location = OnMemory
-          log.error(" Chunck serialize error : {} ", Throwables.getStackTraceAsString(t))
-
+          log.error(" Chunk serialize error : {} ", Throwables.getStackTraceAsString(t))
       }
     }
 
@@ -44,11 +44,16 @@ class Storage(sessionName: String) extends Serializable {
       location match {
         case OnMemory =>
         case OnDisk(path) =>
-          val inputStreamer = new ObjectInputStream(new FileInputStream(path))
-          readyMessages = inputStreamer.readObject().asInstanceOf[ChunkMessage].readyMessages
-          location = OnMemory
-          new File(path).delete()
-          inputStreamer.close()
+          try {
+            val inputStreamer = new ObjectInputStream(new FileInputStream(path))
+            readyMessages = inputStreamer.readObject().asInstanceOf[ChunkMessage].readyMessages
+            location = OnMemory
+            new File(path).delete()
+            inputStreamer.close()
+          } catch {
+            case t: Throwable => location = OnMemory
+              log.error(" Chunk deserialize error : {} ", Throwables.getStackTraceAsString(t))
+          }
       }
 
     }
@@ -140,10 +145,10 @@ class Storage(sessionName: String) extends Serializable {
     workQueue = List()
   }
 
-  private def nextPacketId = {
+  private def nextPacketId: Short = {
     packetIdGenerator = {
-      if ((packetIdGenerator +1) < 0)
-        10
+      if ((packetIdGenerator + 1) < 0)
+        0
       else (packetIdGenerator + 1).toShort
     }
     packetIdGenerator
@@ -159,4 +164,6 @@ class Storage(sessionName: String) extends Serializable {
 
 object Storage {
   def apply(sessionName: String) = new Storage(sessionName)
+
+  def apply(session: ActorRef) = new Storage(session.path.name)
 }

@@ -62,33 +62,33 @@ object PublishTest extends App {
   println("client2 => subscribe complete")
 
 
-  var option3 = new MqttConnectOptions()
-  var client3 = new MqttClient(target, "customer3")
-  client3.setCallback(
-    new MqttCallback {
-      var count = 0
-
-      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
-
-      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
-        count = count + 1
-        if (count % 100 == 0)
-          println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
-      }
-
-      override def connectionLost(throwable: Throwable): Unit = {}
-    }
-  )
-  option3.setKeepAliveInterval(100)
-  option3.setCleanSession(false)
-  client3.connect(option3)
-  println("client3 => connection complete")
-
-  client3.subscribe(("test2"), 1)
-  Thread.sleep(1000)
-  println("client3 => subscribe complete")
-  client3.disconnect()
-  println("client3 => disconnect")
+//  var option3 = new MqttConnectOptions()
+//  var client3 = new MqttClient(target, "customer3")
+//  client3.setCallback(
+//    new MqttCallback {
+//      var count = 0
+//
+//      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
+//
+//      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
+//        count = count + 1
+//        if (count % 100 == 0)
+//          println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
+//      }
+//
+//      override def connectionLost(throwable: Throwable): Unit = {}
+//    }
+//  )
+//  option3.setKeepAliveInterval(100)
+//  option3.setCleanSession(false)
+//  client3.connect(option3)
+//  println("client3 => connection complete")
+//
+//  client3.subscribe(("test2"), 1)
+//  Thread.sleep(1000)
+//  println("client3 => subscribe complete")
+//  client3.disconnect()
+//  println("client3 => disconnect")
 
   Thread.sleep(1000)
 
@@ -151,7 +151,9 @@ object Test3 extends App {
   option3.setCleanSession(false)
   client3.connect(option3)
   println("client3 => connection complete")
-  Thread.sleep(10000)
+  client3.subscribe(("test2"), 1)
+//  Thread.sleep(1000)
+  Thread.sleep(100000)
   client3.disconnect()
   while (true) {
     Thread.sleep(1000)
