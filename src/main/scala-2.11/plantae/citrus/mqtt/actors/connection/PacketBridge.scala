@@ -80,7 +80,6 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
       stay using container
 
     case Event(DISCONNECT, container: RestByteContainer) =>
-      log.info("recceive disconnect")
       container.session ! MQTTInboundPacket(DISCONNECT)
       stop(FSM.Shutdown)
 

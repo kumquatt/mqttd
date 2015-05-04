@@ -5,13 +5,11 @@ import java.util.concurrent.TimeUnit
 import akka.actor._
 import akka.cluster.ClusterEvent._
 import akka.cluster._
-import akka.pattern.ask
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.session.{SessionCreateRequest, SessionCreateResponse, SessionExistRequest, SessionExistResponse}
 import plantae.citrus.mqtt.actors.topic.{TopicCreateRequest, TopicCreateResponse, TopicExistRequest, TopicExistResponse}
 
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.ExecutionContext
 
 sealed trait DirectoryOperation
 
@@ -57,16 +55,51 @@ class DirectoryProxy extends Actor with ActorLogging {
       context.actorOf(Props(classOf[ClusterAwareTopicDirectory], sender, directoryCluster)) ! request
 
     case request: SessionExistRequest =>
-      sender ! Await.result(SystemRoot.sessionRoot ? request, Duration.Inf).asInstanceOf[SessionExistResponse]
+      val originalSender = sender;
+      context.actorOf(Props(new Actor with ActorLogging {
+        override def receive = {
+          case request: SessionExistRequest =>
+            SystemRoot.sessionRoot ! request
+          case response: SessionExistResponse => originalSender ! response
+            context.stop(self)
+        }
+      })) ! request
 
     case request: SessionCreateRequest =>
-      sender ! Await.result(SystemRoot.sessionRoot ? request, Duration.Inf).asInstanceOf[SessionCreateResponse]
+      val originalSender = sender;
+      context.actorOf(Props(new Actor with ActorLogging {
+        override def receive = {
+          case request: SessionCreateRequest =>
+            SystemRoot.sessionRoot ! request
+          case response: SessionCreateResponse => originalSender ! response
+            context.stop(self)
+        }
+      })) ! request
+
 
     case request: TopicExistRequest =>
-      sender ! Await.result(SystemRoot.topicRoot ? request, Duration.Inf).asInstanceOf[TopicExistResponse]
+      val originalSender = sender;
+      context.actorOf(Props(new Actor with ActorLogging {
+        override def receive = {
+          case request: TopicExistRequest =>
+            SystemRoot.topicRoot ! request
+          case response: TopicExistResponse => originalSender ! response
+            context.stop(self)
+        }
+      })) ! request
+
 
     case request: TopicCreateRequest =>
-      sender ! Await.result(SystemRoot.topicRoot ? request, Duration.Inf).asInstanceOf[TopicCreateResponse]
+      val originalSender = sender;
+      context.actorOf(Props(new Actor with ActorLogging {
+        override def receive = {
+          case request: TopicCreateRequest =>
+            SystemRoot.topicRoot ! request
+          case response: TopicCreateResponse => originalSender ! response
+            context.stop(self)
+        }
+      })) ! request
+
   }
 
   def register(member: Member): Unit =
