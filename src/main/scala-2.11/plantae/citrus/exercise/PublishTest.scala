@@ -21,7 +21,7 @@ object PublishTest extends App {
       override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
         count = count + 1
         if (count % 100 == 0)
-          println("[ 1:" + count + " ]\tqos : "+ mqttMessage.getQos + "\tmessage:" + new String(mqttMessage.getPayload))
+          println("[ 1:" + count + " ]\tqos : " + mqttMessage.getQos + "\tmessage:" + new String(mqttMessage.getPayload))
       }
 
       override def connectionLost(throwable: Throwable): Unit = {}
@@ -30,7 +30,9 @@ object PublishTest extends App {
 
   client1.connect(option1)
   println("client1 => connection complete")
-  client1.subscribe(("test2"),0)
+  client1.subscribe(("test2"), 1)
+  println("client1 => subscribe")
+  client1.subscribe(("test2"), 1)
   println("client1 => subscribe")
 
 
@@ -56,7 +58,7 @@ object PublishTest extends App {
   client2.connect(option2)
   println("client2 => connection complete")
 
-  client2.subscribe(("test2"),0)
+  client2.subscribe(("test2"), 1)
   println("client2 => subscribe complete")
 
 
@@ -82,16 +84,18 @@ object PublishTest extends App {
   client3.connect(option3)
   println("client3 => connection complete")
 
-  client3.subscribe(("test2"),0)
+  client3.subscribe(("test2"), 1)
   Thread.sleep(1000)
   println("client3 => subscribe complete")
   client3.disconnect()
+  println("client3 => disconnect")
 
+  Thread.sleep(1000)
 
   Range(1, 100000).foreach(count => {
     if (count % 100 == 0)
       println("publish " + count)
-    client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)").getBytes(), 1, false)
+    client1.publish("test2", ("qos 0 message " + count + " test publish public static void main(String[] args)").getBytes(), 0, false)
   }
   )
   //  client3.setCallback(
@@ -125,8 +129,8 @@ object PublishTest extends App {
 object Test3 extends App {
   val port = 8888
   //    val host = "10.202.32.42"
-  val host = "10.202.208.200"
-  val target = "tcp://10.202.208.200:" + port
+  val host = "127.0.0.1"
+  val target = "tcp://" + host + ":" + port
   var option3 = new MqttConnectOptions()
   var client3 = new MqttClient(target, "customer3")
   client3.setCallback(

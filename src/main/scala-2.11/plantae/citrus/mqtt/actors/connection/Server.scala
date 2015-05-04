@@ -11,14 +11,10 @@ class Server extends Actor with ActorLogging {
   import Tcp._
   import context.system
 
-  import scala.concurrent.ExecutionContext
-
-  implicit val ec = ExecutionContext.global
-
-
   IO(Tcp) ! Bind(self, new InetSocketAddress(
     SystemRoot.config.getString("mqtt.broker.hostname"),
-    SystemRoot.config.getInt("mqtt.broker.port")))
+    SystemRoot.config.getInt("mqtt.broker.port"))
+    , backlog = 1023)
 
   def receive = {
     case Bound(localAddress) =>
