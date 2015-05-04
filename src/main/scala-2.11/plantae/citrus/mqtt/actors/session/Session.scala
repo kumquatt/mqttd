@@ -12,7 +12,7 @@ import plantae.citrus.mqtt.dto._
 import plantae.citrus.mqtt.dto.connect.{CONNACK, CONNECT, DISCONNECT, ReturnCode}
 import plantae.citrus.mqtt.dto.ping.{PINGREQ, PINGRESP}
 import plantae.citrus.mqtt.dto.publish._
-import plantae.citrus.mqtt.dto.subscribe.{SUBACK, SUBSCRIBE, TopicFilter}
+import plantae.citrus.mqtt.dto.subscribe.{SUBACK, SUBSCRIBE}
 import plantae.citrus.mqtt.dto.unsubscribe.{UNSUBACK, UNSUBSCRIBE}
 
 case class MQTTInboundPacket(mqttPacket: Packet)
@@ -204,9 +204,7 @@ class Session extends Actor with ActorLogging {
       }
 
       case subscribe: SUBSCRIBE =>
-        val subscribeResult = subscribeTopics(subscribe.topicFilter)
-        sender ! MQTTOutboundPacket(SUBACK(subscribe.packetId, subscribeResult))
-
+        val subscribeResult = subscribeTopics(subscribe)
       case unsubscribe: UNSUBSCRIBE =>
         unsubscribeTopics(unsubscribe.topicFilter)
         sender ! MQTTOutboundPacket(UNSUBACK(unsubscribe.packetId))
@@ -214,18 +212,22 @@ class Session extends Actor with ActorLogging {
 
   }
 
-  def subscribeTopics(topicFilters: List[TopicFilter]): List[BYTE] = {
-    topicFilters.map(tp => {
+  def subscribeTopics(subscribe: SUBSCRIBE) = {
+    val session = self
+    subscribe.topicFilter.map(tp => {
       context.actorOf(Props(new Actor with ActorLogging {
         override def receive = {
           case request: DirectoryReq =>
-            SystemRoot.directoryProxy ? request
+            SystemRoot.directoryProxy ! request
           case DirectoryTopicResult(topicName, options) =>
-            options.foreach(actor => actor ! Subscribe(self.path.name))
+            options.foreach(actor => actor.tell( Subscribe(session.path.name) ,session ))
+            connectionStatus match {
+              case Some(x) => x.socket ! MQTTOutboundPacket(SUBACK(subscribe.packetId, Range(0, options.size).foldRight(List[BYTE]()) { (a, b) => b :+ BYTE(0x00) }))
+              case None =>
+            }
             context.stop(self)
         }
       })) ! DirectoryReq(tp.topic.value, TypeTopic)
-      BYTE(0x00)
     }
     )
   }
