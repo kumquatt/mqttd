@@ -12,7 +12,7 @@ import plantae.citrus.mqtt.dto.{INT, PUBLISHPAYLOAD, STRING}
 
 class Storage(sessionName: String) extends Serializable {
   private val log = LoggerFactory.getLogger(getClass() + sessionName)
-  private val chunkSize = 10
+  private val chunkSize = 200
 
   sealed trait Location
 

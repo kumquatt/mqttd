@@ -67,6 +67,7 @@ class Session extends Actor with ActorLogging {
   private val storage = Storage(self.path.name)
 
   override def postStop = {
+    log.info("shut down session {}", self)
     connectionStatus match {
       case Some(x) => x.cancelTimer
         connectionStatus = None
@@ -123,7 +124,6 @@ class Session extends Actor with ActorLogging {
           log.info(" disconnected without DISCONNECT : [{}]", self.path.name)
         case None => log.info(" disconnected after DISCONNECT : [{}]", self.path.name)
       }
-
     }
   }
 
@@ -140,6 +140,11 @@ class Session extends Actor with ActorLogging {
     resetTimer
     packet match {
       case mqtt: CONNECT =>
+        connectionStatus match {
+          case Some(x) =>
+            x.destory
+          case None =>
+        }
         connectionStatus = Some(ConnectionStatus(mqtt.will, mqtt.keepAlive.value, self, context, sender))
         bridge ! MQTTOutboundPacket(CONNACK(true, ReturnCode.connectionAccepted))
         log.info("new connection establish : [{}]", self.path.name)
@@ -176,8 +181,10 @@ class Session extends Actor with ActorLogging {
         val actorName = outboundActorName(mqtt.packetId.value.toString)
         context.child(actorName) match {
           case Some(x) => x ! mqtt
-          case None => log.error("[PUBACK] can't find publish outbound actor {} current child actors : {} packetId : {}", actorName ,
-          context.children.foldLeft(List[String]())((x,y) => {x:+y.path.name}), mqtt.packetId)
+          case None => log.error("[PUBACK] can't find publish outbound actor {} current child actors : {} packetId : {}", actorName,
+            context.children.foldLeft(List[String]())((x, y) => {
+              x :+ y.path.name
+            }), mqtt.packetId)
         }
 
       case mqtt: PUBCOMB =>
@@ -194,6 +201,7 @@ class Session extends Actor with ActorLogging {
           case Some(x) => x.destory
           case None =>
         }
+
         log.info(" receive DISCONNECT : [{}]", self.path.name)
 
       }
@@ -233,7 +241,6 @@ class Session extends Actor with ActorLogging {
 
     }
     )
-
   }
 
   def invokePublish = {

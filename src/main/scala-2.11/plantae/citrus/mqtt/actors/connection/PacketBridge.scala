@@ -21,7 +21,7 @@ case object ConnectionEstablished extends BridgeState
 
 sealed trait BridgeData
 
-case class SessionCreateContainer(bridge: ActorRef, send: Packet) extends BridgeData
+case class SessionCreateContainer(bridge: ActorRef, toSend: Packet) extends BridgeData
 
 case class BridgeContainer(session: ActorRef, bridge: ActorRef) extends BridgeData
 
@@ -63,7 +63,7 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
 
   when(ConnectionGetSession) {
     case Event(session: ActorRef, container: SessionCreateContainer) =>
-      session ! MQTTInboundPacket(container.send)
+      session ! MQTTInboundPacket(container.toSend)
       goto(ConnectionForwardConnAct) using BridgeContainer(session, container.bridge)
   }
 
@@ -80,6 +80,7 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
       stay using container
 
     case Event(DISCONNECT, container: RestByteContainer) =>
+      log.info("recceive disconnect")
       container.session ! MQTTInboundPacket(DISCONNECT)
       stop(FSM.Shutdown)
 
@@ -89,7 +90,7 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
 
     case Event(Received(data), container: RestByteContainer) =>
       val decodeResult = PacketDecoder.decode((container.remainingBytes ++ data.toArray[Byte]))
-      decodeResult._1.foreach(container.bridge ! _)
+      decodeResult._1.foreach(self ! _)
       stay using new RestByteContainer(container.session, container.bridge, decodeResult._2)
 
 
