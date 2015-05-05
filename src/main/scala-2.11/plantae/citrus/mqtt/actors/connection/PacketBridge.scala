@@ -34,7 +34,7 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
     case Event(Received(data), container: SessionCreateContainer) =>
       PacketDecoder.decode(data.toArray) match {
         case ((head: CONNECT) :: Nil, _) =>
-          SystemRoot.directoryProxy.tell(DirectoryReq(head.clientId.value, TypeSession),
+          SystemRoot.directoryProxy.tell(DirectorySessionRequest(head.clientId.value),
             context.actorOf(Props(new Actor with ActorLogging {
               def receive = {
                 case DirectorySessionResult(name, session) => {

@@ -2,7 +2,7 @@ package plantae.citrus.mqtt.actors.session
 
 import akka.actor._
 import plantae.citrus.mqtt.actors.SystemRoot
-import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectoryTopicResult, TypeTopic}
+import plantae.citrus.mqtt.actors.directory.{DirectoryTopicRequest, DirectoryTopicResult}
 import plantae.citrus.mqtt.actors.topic.{TopicInMessage, TopicInMessageAck}
 import plantae.citrus.mqtt.dto.INT
 import plantae.citrus.mqtt.dto.publish._
@@ -155,7 +155,7 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
   when(WaitPublish) {
     case Event(publish: PUBLISH, _) =>
       log.debug(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
-      SystemRoot.directoryProxy.tell(DirectoryReq(publish.topic.value, TypeTopic), context.actorOf(Props(new Actor {
+      SystemRoot.directoryProxy.tell(DirectoryTopicRequest(publish.topic.value), context.actorOf(Props(new Actor {
         def receive = {
           case DirectoryTopicResult(name, actors) =>
             actors.foreach(actor =>
@@ -167,7 +167,7 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
                   }
                 ), publishActor)
             )
-//            context.stop(self)
+          //            context.stop(self)
         }
       }
       )))

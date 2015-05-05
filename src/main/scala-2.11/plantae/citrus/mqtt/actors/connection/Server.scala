@@ -19,7 +19,9 @@ class Server extends Actor with ActorLogging {
   def receive = {
     case Bound(localAddress) =>
 
-    case CommandFailed(_: Bind) => context stop self
+    case CommandFailed(_: Bind) =>
+      log.error("bind failure")
+      context stop self
 
     case Connected(remote, local) =>
       log.info("new connection" + remote)

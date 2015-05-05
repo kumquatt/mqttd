@@ -4,7 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor._
 import plantae.citrus.mqtt.actors.SystemRoot
-import plantae.citrus.mqtt.actors.directory.{DirectoryReq, DirectorySessionResult, TypeTopic}
+import plantae.citrus.mqtt.actors.directory._
 import plantae.citrus.mqtt.actors.topic.TopicInMessage
 import plantae.citrus.mqtt.dto.BYTE
 import plantae.citrus.mqtt.dto.connect.Will
@@ -36,14 +36,16 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
   def handleWill = {
     will match {
       case Some(x) =>
-        SystemRoot.directoryProxy.tell(DirectoryReq(x.topic.value, TypeTopic), sessionContext.actorOf(Props(new Actor {
+        SystemRoot.directoryProxy.tell(DirectoryTopicRequest(x.topic.value), sessionContext.actorOf(Props(new Actor {
           def receive = {
-            case DirectorySessionResult(name, actor) =>
+            case DirectoryTopicResult(name, actors) =>
               val topicInMessage = TopicInMessage(x.message.value.getBytes, (x.qos >> 3 & BYTE(0x03.toByte)).value.toShort, x.retain, x.qos.value.toShort match {
                 case 0 => None
                 case qos if (qos > 0) => Some(1)
               })
-              actor.tell(topicInMessage, ActorRef.noSender)
+              actors.foreach {
+                _.tell(topicInMessage, ActorRef.noSender)
+              }
           }
         }
         )))

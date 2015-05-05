@@ -17,16 +17,5 @@ object SystemRoot {
   val sessionRoot = system.actorOf(Props[SessionRoot], "session")
   val topicRoot = system.actorOf(Props[TopicRoot], "topic")
   val directoryProxy = system.actorOf(Props[DirectoryProxy], "directory")
-
-
-//  def directoryOperation(x: DirectoryOperation, senderContext: ActorContext, originalSender: ActorRef) = {
-//    implicit val context: ActorContext = senderContext
-//    directoryProxy.forward(x)
-//  }
-//
-//
-//  def invokeCallback(directoryReq: DirectoryReq, senderContext: ActorContext, props: Props) = {
-//    directoryProxy.tell(directoryReq, senderContext.actorOf(props))
-//  }
 }
 

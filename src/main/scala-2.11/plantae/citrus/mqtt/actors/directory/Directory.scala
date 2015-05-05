@@ -13,17 +13,13 @@ import scala.concurrent.ExecutionContext
 
 sealed trait DirectoryOperation
 
-case class DirectoryReq(name: String, actorType: ActorType) extends DirectoryOperation
+case class DirectorySessionRequest(name: String) extends DirectoryOperation
+
+case class DirectoryTopicRequest(name: String) extends DirectoryOperation
 
 case class DirectorySessionResult(name: String, actor: ActorRef) extends DirectoryOperation
 
 case class DirectoryTopicResult(name: String, actors: List[ActorRef]) extends DirectoryOperation
-
-sealed trait ActorType
-
-case object TypeSession extends ActorType
-
-case object TypeTopic extends ActorType
 
 class DirectoryProxy extends Actor with ActorLogging {
   implicit val timeout = akka.util.Timeout(2, TimeUnit.SECONDS)
@@ -49,10 +45,10 @@ class DirectoryProxy extends Actor with ActorLogging {
     case UnreachableMember(m) => unregister(m)
     case MemberUp(m) => register(m)
 
-    case request@DirectoryReq(_, TypeSession) =>
+    case request: DirectorySessionRequest =>
       context.actorOf(Props(classOf[ClusterAwareSessionDirectory], sender, directoryCluster)) ! request
 
-    case request@DirectoryReq(_, TypeTopic) =>
+    case request: DirectoryTopicRequest =>
       context.actorOf(Props(classOf[ClusterAwareTopicDirectory], sender, directoryCluster)) ! request
 
     case request: SessionExistRequest =>
@@ -126,7 +122,7 @@ class ClusterAwareSessionDirectory(originalSender: ActorRef, cluster: Set[ActorS
   startWith(Scatter, null)
 
   when(Scatter) {
-    case Event(request: DirectoryReq, _) =>
+    case Event(request: DirectorySessionRequest, _) =>
       cluster.foreach(_ ! SessionExistRequest(request.name))
       goto(Gather) using ScatterCount(cluster.size)
   }
@@ -160,7 +156,7 @@ class ClusterAwareTopicDirectory(originalSender: ActorRef, cluster: Set[ActorSel
   startWith(Scatter, null)
   when(Scatter) {
 
-    case Event(request: DirectoryReq, _) =>
+    case Event(request: DirectoryTopicRequest, _) =>
       cluster.foreach(_ ! TopicExistRequest(request.name))
       goto(Gather) using ScatterCount(cluster.size)
 

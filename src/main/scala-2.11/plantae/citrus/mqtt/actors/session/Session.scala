@@ -4,7 +4,6 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
-import akka.pattern.ask
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.directory._
 import plantae.citrus.mqtt.actors.topic.{Subscribe, TopicOutMessage, TopicResponse, Unsubscribe}
@@ -61,7 +60,7 @@ class Session extends Actor with ActorLogging {
   implicit val timeout = akka.util.Timeout(5, TimeUnit.SECONDS)
 
   private var connectionStatus: Option[ConnectionStatus] = None
-  private val storage = Storage(self.path.name)
+  private val storage = Storage(self)
 
   override def postStop = {
     log.info("shut down session {}", self)
@@ -204,7 +203,7 @@ class Session extends Actor with ActorLogging {
       }
 
       case subscribe: SUBSCRIBE =>
-        val subscribeResult = subscribeTopics(subscribe)
+        subscribeTopics(subscribe)
       case unsubscribe: UNSUBSCRIBE =>
         unsubscribeTopics(unsubscribe.topicFilter)
         sender ! MQTTOutboundPacket(UNSUBACK(unsubscribe.packetId))
@@ -217,24 +216,24 @@ class Session extends Actor with ActorLogging {
     subscribe.topicFilter.map(tp => {
       context.actorOf(Props(new Actor with ActorLogging {
         override def receive = {
-          case request: DirectoryReq =>
+          case request: DirectoryTopicRequest =>
             SystemRoot.directoryProxy ! request
           case DirectoryTopicResult(topicName, options) =>
-            options.foreach(actor => actor.tell( Subscribe(session.path.name) ,session ))
+            options.foreach(actor => actor.tell(Subscribe(session.path.name), session))
             connectionStatus match {
               case Some(x) => x.socket ! MQTTOutboundPacket(SUBACK(subscribe.packetId, Range(0, options.size).foldRight(List[BYTE]()) { (a, b) => b :+ BYTE(0x00) }))
               case None =>
             }
             context.stop(self)
         }
-      })) ! DirectoryReq(tp.topic.value, TypeTopic)
+      })) ! DirectoryTopicRequest(tp.topic.value)
     }
     )
   }
 
   def unsubscribeTopics(topics: List[STRING]) = {
     topics.foreach(x => {
-      SystemRoot.directoryProxy.tell(DirectoryReq(x.value, TypeTopic), context.actorOf(Props(new Actor {
+      SystemRoot.directoryProxy.tell(DirectoryTopicRequest(x.value), context.actorOf(Props(new Actor {
         def receive = {
           case DirectoryTopicResult(name, topicActors) =>
             topicActors.foreach(actor => actor ! Unsubscribe(self.path.name))
