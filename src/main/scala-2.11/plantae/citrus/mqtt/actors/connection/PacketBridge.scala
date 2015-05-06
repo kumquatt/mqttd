@@ -7,7 +7,8 @@ import plantae.citrus.mqtt.actors.SystemRoot
 import plantae.citrus.mqtt.actors.directory._
 import plantae.citrus.mqtt.actors.session._
 import plantae.citrus.mqtt.dto.connect._
-import plantae.citrus.mqtt.dto.{Packet, PacketDecoder}
+import plantae.citrus.mqtt.packet.{ConnectPacket, DisconnectPacket, ControlPacket}
+import scodec.Codec
 
 sealed trait BridgeState
 
@@ -21,7 +22,7 @@ case object ConnectionEstablished extends BridgeState
 
 sealed trait BridgeData
 
-case class SessionCreateContainer(bridge: ActorRef, toSend: Packet) extends BridgeData
+case class SessionCreateContainer(bridge: ActorRef, toSend: ControlPacket) extends BridgeData
 
 case class BridgeContainer(session: ActorRef, bridge: ActorRef) extends BridgeData
 
@@ -32,13 +33,15 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
 
   when(ConnectionWaitConnect) {
     case Event(Received(data), container: SessionCreateContainer) =>
-      PacketDecoder.decode(data.toArray) match {
-        case ((head: CONNECT) :: Nil, _) =>
-          SystemRoot.directoryProxy.tell(DirectorySessionRequest(head.clientId.value),
+      val a = PacketDecoder.decode(data.toArray)
+//      PacketDecoder.decode(data.toArray) match {
+      a match {
+        case ((head: ConnectPacket) :: Nil, _) =>
+          SystemRoot.directoryProxy.tell(DirectorySessionRequest(head.clientId),
             context.actorOf(Props(new Actor with ActorLogging {
               def receive = {
                 case DirectorySessionResult(name, session) => {
-                  if (head.cleanSession) {
+                  if (head.variableHeader.cleanSession) {
                     context.watch(session)
                     context.stop(session)
                     context.become({ case Terminated(x) =>
@@ -69,21 +72,21 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
 
 
   when(ConnectionForwardConnAct) {
-    case Event(MQTTOutboundPacket(connAck: CONNACK), container: BridgeContainer) =>
-      socket ! Write(ByteString(connAck.encode))
+    case Event(MQTTOutboundPacket(connAck: ControlPacket), container: BridgeContainer) =>
+      socket ! Write(ByteString(Codec[ControlPacket].encode(connAck).require.toByteArray))
       goto(ConnectionEstablished) using new RestByteContainer(container.session, container.bridge, Array())
   }
 
   when(ConnectionEstablished) {
-    case Event(MQTTOutboundPacket(packet: Packet), container: RestByteContainer) =>
-      socket ! Write(ByteString(packet.encode))
+    case Event(MQTTOutboundPacket(packet: ControlPacket), container: RestByteContainer) =>
+      socket ! Write(ByteString(Codec[ControlPacket].encode(packet).require.toByteArray))
       stay using container
 
-    case Event(DISCONNECT, container: RestByteContainer) =>
-      container.session ! MQTTInboundPacket(DISCONNECT)
+    case Event(DisconnectPacket, container: RestByteContainer) =>
+      container.session ! MQTTInboundPacket(DisconnectPacket())
       stop(FSM.Shutdown)
 
-    case Event(packet: Packet, container: RestByteContainer) =>
+    case Event(packet: ControlPacket, container: RestByteContainer) =>
       container.session ! MQTTInboundPacket(packet)
       stay using container
 

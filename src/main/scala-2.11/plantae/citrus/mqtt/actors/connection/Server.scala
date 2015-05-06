@@ -16,6 +16,7 @@ class Server extends Actor with ActorLogging {
     SystemRoot.config.getInt("mqtt.broker.port"))
     , backlog = 1023)
 
+  println("hello world")
   def receive = {
     case Bound(localAddress) =>
 

@@ -8,8 +8,8 @@ import akka.actor.ActorRef
 import com.google.common.base.Throwables
 import org.slf4j.LoggerFactory
 import plantae.citrus.mqtt.actors.SystemRoot
-import plantae.citrus.mqtt.dto.publish.PUBLISH
-import plantae.citrus.mqtt.dto.{INT, PUBLISHPAYLOAD, STRING}
+import plantae.citrus.mqtt.packet.{ConnectVariableHeader, FixedHeader, PublishPacket}
+import scodec.bits.ByteVector
 
 class Storage(sessionName: String) extends Serializable {
   private val log = LoggerFactory.getLogger(getClass() + sessionName)
@@ -70,7 +70,7 @@ class Storage(sessionName: String) extends Serializable {
   private var packetIdGenerator: Short = 0
   private var topics: List[String] = List()
   private var readyQueue: List[ChunkMessage] = List()
-  private var workQueue: List[PUBLISH] = List()
+  private var workQueue: List[PublishPacket] = List()
 
   def persist(payload: Array[Byte], qos: Short, retain: Boolean, topic: String) = {
     readyQueue match {
@@ -88,10 +88,10 @@ class Storage(sessionName: String) extends Serializable {
   }
 
 
-  def complete(packetId: Option[Short]) =
+  def complete(packetId: Option[Int]) =
     packetId match {
       case Some(y) => workQueue = workQueue.filterNot(_.packetId match {
-        case Some(x) => x.value == y
+        case Some(x) => x == y
         case None => false
       })
       case None =>
@@ -114,18 +114,33 @@ class Storage(sessionName: String) extends Serializable {
     }
   }
 
-  def nextMessage: Option[PUBLISH] = {
+  def nextMessage: Option[PublishPacket] = {
     if (workQueue.size > 10) {
       None
     } else popFirstMessage match {
       case Some(message) =>
         val publish = message.qos match {
           case x if (x > 0) =>
-            workQueue = workQueue :+ PUBLISH(true, INT(message.qos), message.retain, STRING(message.topic), Some(INT(nextPacketId)), PUBLISHPAYLOAD(message.payload))
-            PUBLISH(false, INT(message.qos), message.retain, STRING(message.topic), Some(INT(nextPacketId)), PUBLISHPAYLOAD(message.payload))
+
+            workQueue = workQueue :+ PublishPacket(FixedHeader(dup=true, qos=message.qos, retain=message.retain),
+              topic = message.topic,
+              packetId = Some(nextPacketId),
+              ByteVector(message.payload)
+            )
+
+            PublishPacket(FixedHeader(dup=false, qos=message.qos, retain=message.retain),
+              topic = message.topic,
+              packetId = Some(nextPacketId),
+              ByteVector(message.payload)
+            )
+
 
           case x if (x == 0) =>
-            PUBLISH(false, INT(message.qos), message.retain, STRING(message.topic), None, PUBLISHPAYLOAD(message.payload))
+            PublishPacket(FixedHeader(dup=false, qos=message.qos, retain=message.retain),
+              topic = message.topic,
+              packetId = Some(nextPacketId),
+              ByteVector(message.payload)
+            )
         }
         Some(publish)
       case None => None

@@ -14,7 +14,7 @@ case class Unsubscribe(session: ActorRef) extends TopicRequest
 
 case object ClearList extends TopicRequest
 
-case class TopicInMessage(payload: Array[Byte], qos: Short, retain: Boolean, packetId: Option[Short]) extends TopicRequest
+case class TopicInMessage(payload: Array[Byte], qos: Short, retain: Boolean, packetId: Option[Int]) extends TopicRequest
 
 case object TopicInMessageAck extends TopicResponse
 

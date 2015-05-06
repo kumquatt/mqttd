@@ -17,10 +17,11 @@ class StorageTest extends FunSuite {
         storage.nextMessage match {
           case Some(message) =>
             storage.complete(message.packetId match {
-              case Some(x) => Some(x.value)
+              case Some(x) => Some(x)
               case None => None
             })
-            count + " persist" != new String(message.data.value)
+            println(new String(message.payload.toArray))
+            count + " persist" != new String(message.payload.toArray)
 
           case None => true
         }
