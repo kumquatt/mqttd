@@ -17,7 +17,7 @@ case class DirectorySessionRequest(name: String) extends DirectoryOperation
 
 case class DirectoryTopicRequest(name: String) extends DirectoryOperation
 
-case class DirectorySessionResult(name: String, actor: ActorRef) extends DirectoryOperation
+case class DirectorySessionResult(actor: ActorRef, isCreated: Boolean) extends DirectoryOperation
 
 case class DirectoryTopicResult(name: String, actors: List[ActorRef]) extends DirectoryOperation
 
@@ -131,7 +131,7 @@ class ClusterAwareSessionDirectory(originalSender: ActorRef, cluster: Set[ActorS
     case Event(SessionExistResponse(sessionId, session), ScatterCount(count)) =>
 
       session match {
-        case Some(x) => originalSender ! DirectorySessionResult(sessionId, x)
+        case Some(x) => originalSender ! DirectorySessionResult(x, false)
           stop(FSM.Shutdown)
         case None =>
           if (count - 1 == 0) {
@@ -143,7 +143,7 @@ class ClusterAwareSessionDirectory(originalSender: ActorRef, cluster: Set[ActorS
 
   when(CreateNew) {
     case Event(SessionCreateResponse(clientId, newActor), ScatterCount(0)) =>
-      originalSender ! DirectorySessionResult(clientId, newActor)
+      originalSender ! DirectorySessionResult(newActor, true)
       stop(FSM.Shutdown)
   }
 

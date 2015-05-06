@@ -127,9 +127,9 @@ object PublishTest extends App {
 }
 
 object Test3 extends App {
-  val port = 8888
+  val port = 1883
   //    val host = "10.202.32.42"
-  val host = "127.0.0.1"
+  val host = "10.202.32.45"
   val target = "tcp://" + host + ":" + port
   var option3 = new MqttConnectOptions()
   var client3 = new MqttClient(target, "customer3")
@@ -152,6 +152,8 @@ object Test3 extends App {
   client3.connect(option3)
   println("client3 => connection complete")
   client3.subscribe(("test2"), 1)
+  client3.publish("a/b" ,"topic test12".getBytes,1, false)
+  println("topic publish complete")
   //  Thread.sleep(1000)
   Thread.sleep(100000)
   client3.disconnect()

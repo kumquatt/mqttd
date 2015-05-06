@@ -1,5 +1,7 @@
 package plantae.citrus.mqtt.dto.connect
 
+import java.nio.ByteBuffer
+
 import plantae.citrus.mqtt.packet.ControlPacket
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
@@ -23,19 +25,18 @@ case object ReturnCode {
 object PacketDecoder {
 
 
-  def decode(data: Array[Byte]): (List[ControlPacket], Array[Byte]) = {
+  def decode(data: BitVector): (List[ControlPacket], BitVector) = {
 
     @tailrec
-    def decodeRec(data: Array[Byte], acc: List[ControlPacket]) : (List[ControlPacket], Array[Byte]) = {
+    def decodeRec(data: BitVector, acc: List[ControlPacket]): (List[ControlPacket], BitVector) = {
       val result = Codec[ControlPacket].decode(BitVector(data))
 
-      if (result.isSuccessful && result.require.remainder.nonEmpty) decodeRec(result.require.remainder.toByteArray, result.require.value :: acc)
-      else if (result.isSuccessful) (result.require.value :: acc, result.require.remainder.toByteArray)
-      else (acc, Array.empty[Byte])
+      if (result.isSuccessful && result.require.remainder.nonEmpty) decodeRec(result.require.remainder, result.require.value :: acc)
+      else if (result.isSuccessful) (result.require.value :: acc, result.require.remainder)
+      else (acc, BitVector.empty)
     }
 
-    val a = decodeRec(data, List.empty[ControlPacket])
+    decodeRec(data, List.empty[ControlPacket])
 
-    a
   }
 }
