@@ -2,8 +2,9 @@ package plantae.citrus.mqtt.actors.topic
 
 import akka.actor._
 
-import scala.util.Random
 import scala.collection.mutable.Map
+import scala.util.Random
+
 sealed trait TopicRequest
 
 sealed trait TopicResponse
@@ -93,13 +94,13 @@ class Topic(name: String) extends Actor with ActorLogging {
     case TopicInMessage(payload, qos, retain, packetId) => {
       log.debug("qos : {} , retain : {} , payload : {} , sender {}", qos, retain, new String(payload), sender)
       sender ! TopicInMessageAck
+      val topicOutMessage = TopicOutMessage(payload, qos, retain, name)
       subscriberMap.par.foreach(
         (actor) => {
-          actor ! TopicOutMessage(payload, qos, retain, name)
+          actor ! topicOutMessage
         }
       )
     }
-    case TopicOutMessageAck =>
   }
 
   def printEverySubscriber = {
