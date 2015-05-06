@@ -115,16 +115,14 @@ class Storage(sessionName: String) extends Serializable {
   }
 
   def nextMessage: Option[PUBLISH] = {
-
     if (workQueue.size > 10) {
       None
     } else popFirstMessage match {
       case Some(message) =>
         val publish = message.qos match {
           case x if (x > 0) =>
-            val publish = PUBLISH(false, INT(message.qos), message.retain, STRING(message.topic), Some(INT(nextPacketId)), PUBLISHPAYLOAD(message.payload))
-            workQueue = workQueue :+ publish
-            publish
+            workQueue = workQueue :+ PUBLISH(true, INT(message.qos), message.retain, STRING(message.topic), Some(INT(nextPacketId)), PUBLISHPAYLOAD(message.payload))
+            PUBLISH(false, INT(message.qos), message.retain, STRING(message.topic), Some(INT(nextPacketId)), PUBLISHPAYLOAD(message.payload))
 
           case x if (x == 0) =>
             PUBLISH(false, INT(message.qos), message.retain, STRING(message.topic), None, PUBLISHPAYLOAD(message.payload))
@@ -133,7 +131,6 @@ class Storage(sessionName: String) extends Serializable {
       case None => None
     }
   }
-
 
   def socketClose = {
   }

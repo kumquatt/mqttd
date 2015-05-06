@@ -55,6 +55,7 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
   }
 
   def destory = {
+    handleWill
     cancelTimer
   }
 }

@@ -62,33 +62,33 @@ object PublishTest extends App {
   println("client2 => subscribe complete")
 
 
-//  var option3 = new MqttConnectOptions()
-//  var client3 = new MqttClient(target, "customer3")
-//  client3.setCallback(
-//    new MqttCallback {
-//      var count = 0
-//
-//      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
-//
-//      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
-//        count = count + 1
-//        if (count % 100 == 0)
-//          println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
-//      }
-//
-//      override def connectionLost(throwable: Throwable): Unit = {}
-//    }
-//  )
-//  option3.setKeepAliveInterval(100)
-//  option3.setCleanSession(false)
-//  client3.connect(option3)
-//  println("client3 => connection complete")
-//
-//  client3.subscribe(("test2"), 1)
-//  Thread.sleep(1000)
-//  println("client3 => subscribe complete")
-//  client3.disconnect()
-//  println("client3 => disconnect")
+  //  var option3 = new MqttConnectOptions()
+  //  var client3 = new MqttClient(target, "customer3")
+  //  client3.setCallback(
+  //    new MqttCallback {
+  //      var count = 0
+  //
+  //      override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
+  //
+  //      override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
+  //        count = count + 1
+  //        if (count % 100 == 0)
+  //          println("[ 3:" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
+  //      }
+  //
+  //      override def connectionLost(throwable: Throwable): Unit = {}
+  //    }
+  //  )
+  //  option3.setKeepAliveInterval(100)
+  //  option3.setCleanSession(false)
+  //  client3.connect(option3)
+  //  println("client3 => connection complete")
+  //
+  //  client3.subscribe(("test2"), 1)
+  //  Thread.sleep(1000)
+  //  println("client3 => subscribe complete")
+  //  client3.disconnect()
+  //  println("client3 => disconnect")
 
   Thread.sleep(1000)
 
@@ -152,7 +152,7 @@ object Test3 extends App {
   client3.connect(option3)
   println("client3 => connection complete")
   client3.subscribe(("test2"), 1)
-//  Thread.sleep(1000)
+  //  Thread.sleep(1000)
   Thread.sleep(100000)
   client3.disconnect()
   while (true) {
@@ -161,3 +161,50 @@ object Test3 extends App {
 
 
 }
+
+
+object TopicPublish extends App {
+  val port = 8888
+  //    val host = "10.202.32.42"
+  val host = "127.0.0.1"
+  val target = "tcp://" + host + ":" + port
+  Range(1, 500).foreach(each => {
+    val option3 = new MqttConnectOptions()
+    val client3 = new MqttClient(target, "customer" + each)
+    client3.setCallback(
+      new MqttCallback {
+        var count = 0
+
+        override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
+
+        override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
+          count = count + 1
+          println("[ " + each + ":" + count + " ]\tmessage:" + new String(mqttMessage.getPayload))
+        }
+
+        override def connectionLost(throwable: Throwable): Unit = {}
+      }
+    )
+    option3.setKeepAliveInterval(100)
+    option3.setCleanSession(true)
+    client3.connect(option3)
+    println("client3 => connection complete")
+    client3.subscribe(("a/b"), 1)
+  }
+  )
+
+
+  var option3 = new MqttConnectOptions()
+  var client3 = new MqttClient(target, "customer" + "publisher")
+  client3.connect()
+  client3.publish("a/b", "topic test message".getBytes, 2, false)
+
+  //  Thread.sleep(1000)
+  Thread.sleep(100000)
+  while (true) {
+    Thread.sleep(1000)
+  }
+
+
+}
+

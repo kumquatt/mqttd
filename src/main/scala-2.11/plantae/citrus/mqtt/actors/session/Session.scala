@@ -219,7 +219,7 @@ class Session extends Actor with ActorLogging {
           case request: DirectoryTopicRequest =>
             SystemRoot.directoryProxy ! request
           case DirectoryTopicResult(topicName, options) =>
-            options.foreach(actor => actor.tell(Subscribe(session.path.name), session))
+            options.par.foreach(actor => actor.tell(Subscribe(session), session))
             connectionStatus match {
               case Some(x) => x.socket ! MQTTOutboundPacket(SUBACK(subscribe.packetId, Range(0, options.size).foldRight(List[BYTE]()) { (a, b) => b :+ BYTE(0x00) }))
               case None =>
@@ -232,11 +232,12 @@ class Session extends Actor with ActorLogging {
   }
 
   def unsubscribeTopics(topics: List[STRING]) = {
+    val session = self
     topics.foreach(x => {
       SystemRoot.directoryProxy.tell(DirectoryTopicRequest(x.value), context.actorOf(Props(new Actor {
         def receive = {
           case DirectoryTopicResult(name, topicActors) =>
-            topicActors.foreach(actor => actor ! Unsubscribe(self.path.name))
+            topicActors.par.foreach(actor => actor ! Unsubscribe(session))
           //          topicActor != UNSUBSCRIBE
         }
       })))

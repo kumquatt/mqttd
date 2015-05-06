@@ -2,16 +2,15 @@ package plantae.citrus.mqtt.actors.topic
 
 import akka.actor._
 
-import scala.collection.mutable.Map
 import scala.util.Random
-
+import scala.collection.mutable.Map
 sealed trait TopicRequest
 
 sealed trait TopicResponse
 
-case class Subscribe(clientId: String) extends TopicRequest
+case class Subscribe(session: ActorRef) extends TopicRequest
 
-case class Unsubscribe(clientId: String) extends TopicRequest
+case class Unsubscribe(session: ActorRef) extends TopicRequest
 
 case object ClearList extends TopicRequest
 
@@ -63,48 +62,38 @@ class TopicRoot extends Actor with ActorLogging {
         case Nil => None
         case topics: List[ActorRef] => Some(topics)
       })
-
-
-    //      context.child(topicName) match {
-    //        case Some(x) => sender ! x
-    //        case None => log.debug("new topic is created [{}]", topicName)
-    //          sender ! context.actorOf(Props[Topic], topicName)
-    //      }
   }
 }
 
 class Topic(name: String) extends Actor with ActorLogging {
-  val subscriberMap: Map[String, ActorRef] = Map()
+  private var subscriberMap: Set[ActorRef] = Set()
 
   def receive = {
-    //    case Terminated(a) => {
-    //
-    //    }
-    case Subscribe(clientId) => {
-      log.debug("Subscribe client({}) topic({})", clientId, name)
-      if (!subscriberMap.exists(each => each._1.equals(clientId) && each._2 == sender))
-        subscriberMap.+=((clientId, sender))
-      //      context.watch(sender())
+    case Subscribe(session) => {
+      log.debug("Subscribe client({}) topic({})", session.path.name, name)
+      if (!subscriberMap.exists(_ == session))
+        subscriberMap = subscriberMap.+(session)
+
       printEverySubscriber
     }
 
-    case Unsubscribe(clientId) => {
-      log.debug("Unsubscribe client({}) topic({})", clientId, name)
-      if (!subscriberMap.exists(each => each._1.equals(clientId)))
-        subscriberMap.-(clientId)
+    case Unsubscribe(session) => {
+      log.debug("Unsubscribe client({}) topic({})", session.path.name, name)
+      subscriberMap = subscriberMap.filter(_ != session)
+
       printEverySubscriber
     }
 
     case ClearList => {
       log.debug("Clear subscriber list")
-      subscriberMap.clear()
+      subscriberMap = Set()
       printEverySubscriber
     }
 
     case TopicInMessage(payload, qos, retain, packetId) => {
       log.debug("qos : {} , retain : {} , payload : {} , sender {}", qos, retain, new String(payload), sender)
       sender ! TopicInMessageAck
-      subscriberMap.values.foreach(
+      subscriberMap.par.foreach(
         (actor) => {
           actor ! TopicOutMessage(payload, qos, retain, name)
         }
@@ -115,7 +104,7 @@ class Topic(name: String) extends Actor with ActorLogging {
 
   def printEverySubscriber = {
     log.debug("{}'s subscriber ", name)
-    subscriberMap.foreach(s => log.debug("{},", s._1))
+    subscriberMap.foreach(s => log.debug("{},", s))
   }
 }
 
