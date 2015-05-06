@@ -213,6 +213,8 @@ class Session extends Actor with ActorLogging {
       case unsubscribe: UnsubscribePacket =>
         unsubscribeTopics(unsubscribe.topicFilter)
         sender ! MQTTOutboundPacket(UnsubAckPacket(packetId = unsubscribe.packetId))
+
+
     }
 
   }
@@ -269,11 +271,11 @@ class Session extends Actor with ActorLogging {
 
             context.child(actorName) match {
               case Some(actor) =>
-                log.info("using exist actor publish  complete {} ", actorName)
+                log.debug("using exist actor publish  complete {} ", actorName)
                 actor ! x
 
               case None =>
-                log.info("create new actor publish  complete {} ", actorName)
+                log.debug("create new actor publish  complete {} ", actorName)
                 context.actorOf(Props(classOf[OutboundPublisher], client.socket, session), actorName) ! x
             }
 

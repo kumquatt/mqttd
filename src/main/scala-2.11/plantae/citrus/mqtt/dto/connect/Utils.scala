@@ -1,7 +1,5 @@
 package plantae.citrus.mqtt.dto.connect
 
-import java.nio.ByteBuffer
-
 import plantae.citrus.mqtt.packet.ControlPacket
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
@@ -29,11 +27,11 @@ object PacketDecoder {
 
     @tailrec
     def decodeRec(data: BitVector, acc: List[ControlPacket]): (List[ControlPacket], BitVector) = {
-      val result = Codec[ControlPacket].decode(BitVector(data))
-
-      if (result.isSuccessful && result.require.remainder.nonEmpty) decodeRec(result.require.remainder, result.require.value :: acc)
-      else if (result.isSuccessful) (result.require.value :: acc, result.require.remainder)
-      else (acc, BitVector.empty)
+      val result = Codec[ControlPacket].decode(data)
+      if (result.isSuccessful) {
+        if (result.require.remainder.nonEmpty) decodeRec(result.require.remainder, result.require.value :: acc)
+        else (result.require.value :: acc, result.require.remainder)
+      } else (acc, BitVector.empty)
     }
 
     decodeRec(data, List.empty[ControlPacket])
