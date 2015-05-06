@@ -175,6 +175,7 @@ class Session extends Actor with ActorLogging {
         context.child(actorName) match {
           case Some(x) => x ! mqtt
           case None => log.error("[PUBREC] can't find publish outbound actor {}", actorName)
+
         }
 
       case mqtt: PubAckPacket =>
@@ -268,11 +269,11 @@ class Session extends Actor with ActorLogging {
 
             context.child(actorName) match {
               case Some(actor) =>
-                log.debug("using exist actor publish  complete {} ", actorName)
+                log.info("using exist actor publish  complete {} ", actorName)
                 actor ! x
 
               case None =>
-                log.debug("create new actor publish  complete {} ", actorName)
+                log.info("create new actor publish  complete {} ", actorName)
                 context.actorOf(Props(classOf[OutboundPublisher], client.socket, session), actorName) ! x
             }
 

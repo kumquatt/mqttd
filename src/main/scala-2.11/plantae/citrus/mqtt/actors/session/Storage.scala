@@ -8,7 +8,7 @@ import akka.actor.ActorRef
 import com.google.common.base.Throwables
 import org.slf4j.LoggerFactory
 import plantae.citrus.mqtt.actors.SystemRoot
-import plantae.citrus.mqtt.packet.{ConnectVariableHeader, FixedHeader, PublishPacket}
+import plantae.citrus.mqtt.packet.{FixedHeader, PublishPacket}
 import scodec.bits.ByteVector
 
 class Storage(sessionName: String) extends Serializable {
@@ -67,7 +67,7 @@ class Storage(sessionName: String) extends Serializable {
   }
 
 
-  private var packetIdGenerator: Short = 0
+  private var packetIdGenerator: Int = 0
   private var topics: List[String] = List()
   private var readyQueue: List[ChunkMessage] = List()
   private var workQueue: List[PublishPacket] = List()
@@ -115,33 +115,34 @@ class Storage(sessionName: String) extends Serializable {
   }
 
   def nextMessage: Option[PublishPacket] = {
-    if (workQueue.size > 10) {
+    if (workQueue.size > 0) {
       None
     } else popFirstMessage match {
       case Some(message) =>
         val publish = message.qos match {
           case x if (x > 0) =>
-
-            workQueue = workQueue :+ PublishPacket(FixedHeader(dup=true, qos=message.qos, retain=message.retain),
+            val packetId = nextPacketId
+            workQueue = workQueue :+ PublishPacket(FixedHeader(dup = true, qos = message.qos, retain = message.retain),
               topic = message.topic,
-              packetId = Some(nextPacketId),
+              packetId = Some(packetId),
               ByteVector(message.payload)
             )
 
-            PublishPacket(FixedHeader(dup=false, qos=message.qos, retain=message.retain),
+            PublishPacket(FixedHeader(dup = false, qos = message.qos, retain = message.retain),
               topic = message.topic,
-              packetId = Some(nextPacketId),
+              packetId = Some(packetId),
               ByteVector(message.payload)
             )
 
 
           case x if (x == 0) =>
-            PublishPacket(FixedHeader(dup=false, qos=message.qos, retain=message.retain),
+            PublishPacket(FixedHeader(dup = false, qos = message.qos, retain = message.retain),
               topic = message.topic,
               packetId = Some(nextPacketId),
               ByteVector(message.payload)
             )
         }
+
         Some(publish)
       case None => None
     }
@@ -157,11 +158,11 @@ class Storage(sessionName: String) extends Serializable {
     workQueue = List()
   }
 
-  private def nextPacketId: Short = {
+  private def nextPacketId: Int = {
     packetIdGenerator = {
-      if ((packetIdGenerator + 1) < 0)
-        0
-      else (packetIdGenerator + 1).toShort
+      if ((packetIdGenerator + 1) >= Short.MaxValue)
+        1
+      else (packetIdGenerator + 1)
     }
     packetIdGenerator
   }

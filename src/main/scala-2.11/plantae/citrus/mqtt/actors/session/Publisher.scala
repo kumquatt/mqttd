@@ -58,7 +58,6 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
   when(WaitPublish) {
     case Event(publish: PublishPacket, _) =>
       log.debug(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
-
       client ! MQTTOutboundPacket(publish)
       publish.fixedHeader.qos match {
         case 0 =>
@@ -131,10 +130,10 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
 class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] with ActorLogging {
   val publishActor = self
 
-  val packetId: Option[Short] = qos match {
+  val packetId: Option[Int] = qos match {
     case 0 => None
     case anyOther if (anyOther > 0) => Some(
-      publishActor.path.name.drop(PublishConstant.inboundPrefix.length).toShort
+      publishActor.path.name.drop(PublishConstant.inboundPrefix.length).toInt
     )
   }
 
