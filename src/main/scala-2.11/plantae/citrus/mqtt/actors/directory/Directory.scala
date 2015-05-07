@@ -15,11 +15,11 @@ sealed trait DirectoryOperation
 
 case class DirectorySessionRequest(name: String) extends DirectoryOperation
 
-case class DirectoryTopicRequest(name: String) extends DirectoryOperation
+case class DirectoryTopicRequest(name: String, qos: Short = -1) extends DirectoryOperation
 
 case class DirectorySessionResult(actor: ActorRef, isCreated: Boolean) extends DirectoryOperation
 
-case class DirectoryTopicResult(name: String, actors: List[ActorRef]) extends DirectoryOperation
+case class DirectoryTopicResult(name: String, qos: Short, actors: List[ActorRef]) extends DirectoryOperation
 
 class DirectoryProxy extends Actor with ActorLogging {
   implicit val timeout = akka.util.Timeout(2, TimeUnit.SECONDS)

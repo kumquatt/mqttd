@@ -35,7 +35,7 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
       case Some(x) =>
         SystemRoot.directoryProxy.tell(DirectoryTopicRequest(x.topic), sessionContext.actorOf(Props(new Actor {
           def receive = {
-            case DirectoryTopicResult(name, actors) =>
+            case DirectoryTopicResult(name, qos, actors) =>
               val topicInMessage = TopicInMessage(x.message.toArray, x.qos, x.retain, x.qos match {
                 case 0 => None
                 case qos if (qos > 0) => Some(0)

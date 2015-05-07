@@ -242,33 +242,7 @@ class Session extends Actor with ActorLogging {
   def subscribeTopics(subscribe: SubscribePacket) = {
     val session = self
 
-
     context.actorOf(SubscribeTopic.props(subscribe.topicFilter, session, connectionStatus,subscribe))
-//    subscribe.topicFilter.map(tp => {
-//      context.actorOf(Props(new Actor with ActorLogging {
-//        override def receive = {
-//          case request: DirectoryTopicRequest =>
-//            SystemRoot.directoryProxy ! request
-//          case DirectoryTopicResult(topicName, options) =>
-//            options.par.foreach(actor => actor.tell(Subscribe(session), session))
-//            context.become(gathering)
-//        }
-//
-//        def gathering: Receive = {
-//          case Subscribed(name) =>
-//            connectionStatus match {
-//              case Some(x) => x.socket ! MQTTOutboundPacket(
-//                SubAckPacket(packetId = subscribe.packetId,
-//                  returnCode = Range(0, subscribe.topicFilter.size).foldRight(List[Short]()) { (a, b) => b :+ 0.toShort })
-//              )
-//              case None =>
-//            }
-//            context.stop(self)
-//
-//        }
-//      })) ! DirectoryTopicRequest(tp._1)
-//    }
-//    )
   }
 
   def unsubscribeTopics(topics: List[String]) = {
@@ -276,7 +250,7 @@ class Session extends Actor with ActorLogging {
     topics.foreach(x => {
       SystemRoot.directoryProxy.tell(DirectoryTopicRequest(x), context.actorOf(Props(new Actor {
         def receive = {
-          case DirectoryTopicResult(name, topicActors) =>
+          case DirectoryTopicResult(name, qos, topicActors) =>
             topicActors.par.foreach(actor => actor ! Unsubscribe(session))
           //          topicActor != UNSUBSCRIBE
         }
@@ -326,7 +300,7 @@ class SubscribeTopic(topicFilter: List[(String, Short)],
                      connectionStatus: Option[ConnectionStatus],
                      subscribe: SubscribePacket) extends Actor with ActorLogging {
 
-  topicFilter.map( x => self ! DirectoryTopicRequest(x._1))
+  topicFilter.map( x => self ! DirectoryTopicRequest(x._1, x._2))
   val topicFilterResult = scala.collection.mutable.Map[String, Short]()
   var count = 0
 
@@ -334,8 +308,8 @@ class SubscribeTopic(topicFilter: List[(String, Short)],
     case request: DirectoryTopicRequest =>
       log.debug("[SUBSCRIBE] : request({})", request.name)
       SystemRoot.directoryProxy ! request
-    case DirectoryTopicResult(topicName, options) =>
-      options.par.foreach(actor => actor.tell(Subscribe(session), self))
+    case DirectoryTopicResult(topicName, qos, options) =>
+      options.par.foreach(actor => actor.tell(Subscribe(session, qos), self))
 
     case Subscribed(name) =>
       topicFilterResult.put(name, 0.toShort)
@@ -352,9 +326,9 @@ class SubscribeTopic(topicFilter: List[(String, Short)],
         log.debug("[SUBSCRIBE] : result ({})", result)
 
         connectionStatus match {
+
           case Some(x) => x.socket ! MQTTOutboundPacket(
-            SubAckPacket(packetId = subscribe.packetId,
-              returnCode = result)
+            SubAckPacket(packetId = subscribe.packetId, returnCode = result)
           )
           case None =>
         }

@@ -155,7 +155,7 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
       log.debug(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
       SystemRoot.directoryProxy.tell(DirectoryTopicRequest(publish.topic), context.actorOf(Props(new Actor {
         def receive = {
-          case DirectoryTopicResult(name, actors) =>
+          case DirectoryTopicResult(name, qos, actors) =>
             actors.foreach(actor =>
               actor.tell(
                 TopicInMessage(publish.payload.toArray, publish.fixedHeader.qos, publish.fixedHeader.retain,

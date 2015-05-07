@@ -88,7 +88,7 @@ class Topic(name: String) extends Actor with ActorLogging {
       log.debug("Unsubscribe client({}) topic({})", session.path.name, name)
 
       subscriberMap.-=(session)
-      
+
       sender ! Unsubscribed(name)
       printEverySubscriber
     }
