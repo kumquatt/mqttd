@@ -71,6 +71,7 @@ class Storage(sessionName: String) extends Serializable {
   private var topics: List[String] = List()
   private var readyQueue: List[ChunkMessage] = List()
   private var workQueue: List[PublishPacket] = List()
+  private var redoQueue: List[PublishPacket] = List()
 
   def persist(payload: Array[Byte], qos: Short, retain: Boolean, topic: String) = {
     readyQueue match {
@@ -115,40 +116,46 @@ class Storage(sessionName: String) extends Serializable {
   }
 
   def nextMessage: Option[PublishPacket] = {
-    if (workQueue.size > 0) {
+    if (workQueue.size > 10) {
       None
-    } else popFirstMessage match {
-      case Some(message) =>
-        val publish = message.qos match {
-          case x if (x > 0) =>
-            val packetId = nextPacketId
-            workQueue = workQueue :+ PublishPacket(FixedHeader(dup = true, qos = message.qos, retain = message.retain),
-              topic = message.topic,
-              packetId = Some(packetId),
-              ByteVector(message.payload)
-            )
+    } else {
+      redoQueue match {
+        case head :: tail =>
+          redoQueue = tail
+          workQueue = workQueue :+ head
+          Some(PublishPacket(FixedHeader(true, head.fixedHeader.qos, head.fixedHeader.retain), head.topic, head.packetId, head.payload))
+        case Nil =>
+          popFirstMessage match {
+            case Some(message) =>
+              val publish = message.qos match {
+                case x if (x > 0) =>
+                  val publishPacket = PublishPacket(FixedHeader(dup = false, qos = message.qos, retain = message.retain),
+                    topic = message.topic,
+                    packetId = Some(nextPacketId),
+                    ByteVector(message.payload)
+                  )
+                  workQueue = workQueue :+ publishPacket
+                  publishPacket
 
-            PublishPacket(FixedHeader(dup = false, qos = message.qos, retain = message.retain),
-              topic = message.topic,
-              packetId = Some(packetId),
-              ByteVector(message.payload)
-            )
+                case x if (x == 0) =>
+                  PublishPacket(FixedHeader(dup = false, qos = message.qos, retain = message.retain),
+                    topic = message.topic,
+                    packetId = Some(nextPacketId),
+                    ByteVector(message.payload)
+                  )
+              }
 
+              Some(publish)
+            case None => None
+          }
+      }
 
-          case x if (x == 0) =>
-            PublishPacket(FixedHeader(dup = false, qos = message.qos, retain = message.retain),
-              topic = message.topic,
-              packetId = Some(nextPacketId),
-              ByteVector(message.payload)
-            )
-        }
-
-        Some(publish)
-      case None => None
     }
   }
 
   def socketClose = {
+    redoQueue = redoQueue ++ workQueue
+    workQueue = Nil
   }
 
   def clear = {

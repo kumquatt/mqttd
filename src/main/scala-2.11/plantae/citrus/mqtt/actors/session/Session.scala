@@ -98,21 +98,37 @@ class Session extends Actor with ActorLogging {
 
   def handleSession(command: SessionRequest): Unit = command match {
 
-    case SessionKeepAliveTimeOut => {
+    case SessionKeepAliveTimeOut =>
+      log.debug("Session TimeOut : " + self.path.name)
+
       connectionStatus match {
-        case Some(x) => context.stop(x.socket)
+        case Some(x) =>
+          x.destroyAbnormally
         case None =>
       }
-    }
+
+      connectionStatus = None
+      storage.socketClose
+
+      context.children.foreach(child => {
+        if (child.path.name.startsWith(PublishConstant.inboundPrefix) || child.path.name.startsWith(PublishConstant.outboundPrefix))
+          context.stop(child)
+      })
+
 
     case ClientCloseConnection => {
       log.debug("ClientCloseConnection : " + self.path.name)
       val currentConnectionStatus = connectionStatus
       connectionStatus = None
+      storage.socketClose
+      context.children.foreach(child => {
+        if (child.path.name.startsWith(PublishConstant.inboundPrefix) || child.path.name.startsWith(PublishConstant.outboundPrefix))
+          context.stop(child)
+      })
+
       currentConnectionStatus match {
         case Some(x) =>
-          x.handleWill
-          x.destory
+          x.destroyAbnormally
           log.info(" disconnected without DISCONNECT : [{}]", self.path.name)
         case None => log.info(" disconnected after DISCONNECT : [{}]", self.path.name)
       }
@@ -136,13 +152,13 @@ class Session extends Actor with ActorLogging {
       case mqtt: ConnectPacket =>
         connectionStatus match {
           case Some(x) =>
-            x.destory
+            x.destroyAbnormally
           case None =>
         }
 
-        val mqttWill:Option[Will] = mqtt.variableHeader.willFlag match {
+        val mqttWill: Option[Will] = mqtt.variableHeader.willFlag match {
           case false => None
-          case true => Some(Will(mqtt.variableHeader.willQoS, mqtt.variableHeader.willRetain,mqtt.willTopic.get, mqtt.willMessage.get))
+          case true => Some(Will(mqtt.variableHeader.willQoS, mqtt.variableHeader.willRetain, mqtt.willTopic.get, mqtt.willMessage.get))
         }
 
         connectionStatus = Some(ConnectionStatus(mqttWill, mqtt.variableHeader.keepAliveTime, self, context, sender))
@@ -150,7 +166,7 @@ class Session extends Actor with ActorLogging {
         log.info("new connection establish : [{}]", self.path.name)
         invokePublish
 
-      case p : PingReqPacket =>
+      case p: PingReqPacket =>
         bridge ! MQTTOutboundPacket(p)
 
       case mqtt: PublishPacket => {
@@ -199,10 +215,14 @@ class Session extends Actor with ActorLogging {
         val currentConnectionStatus = connectionStatus
         connectionStatus = None
         currentConnectionStatus match {
-          case Some(x) => x.destory
+          case Some(x) => x.destroyProperly
           case None =>
         }
-
+        storage.socketClose
+        context.children.foreach(child => {
+          if (child.path.name.startsWith(PublishConstant.inboundPrefix) || child.path.name.startsWith(PublishConstant.outboundPrefix))
+            context.stop(child)
+        })
         log.info(" receive DISCONNECT : [{}]", self.path.name)
 
       }

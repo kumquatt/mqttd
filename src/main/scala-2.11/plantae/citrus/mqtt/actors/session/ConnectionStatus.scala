@@ -20,8 +20,6 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
   private var keepAliveTimer: Cancellable = SystemRoot.system.scheduler.scheduleOnce(
     FiniteDuration(keepAliveTime, TimeUnit.SECONDS), session, SessionKeepAliveTimeOut)
 
-  private var publishActor: Option[ActorRef] = None
-
   def cancelTimer = {
     keepAliveTimer.cancel()
   }
@@ -32,7 +30,7 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
       FiniteDuration(keepAliveTime, TimeUnit.SECONDS), session, SessionKeepAliveTimeOut)
   }
 
-  def handleWill = {
+  private def publishWill = {
     will match {
       case Some(x) =>
         SystemRoot.directoryProxy.tell(DirectoryTopicRequest(x.topic), sessionContext.actorOf(Props(new Actor {
@@ -40,11 +38,14 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
             case DirectoryTopicResult(name, actors) =>
               val topicInMessage = TopicInMessage(x.message.toArray, x.qos, x.retain, x.qos match {
                 case 0 => None
-                case qos if (qos > 0) => Some(1)
+                case qos if (qos > 0) => Some(0)
               })
+
               actors.foreach {
                 _.tell(topicInMessage, ActorRef.noSender)
               }
+
+              context.stop(self)
           }
         }
         )))
@@ -53,8 +54,16 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
     }
   }
 
-  def destory = {
-    handleWill
+  def destroyProperly = {
+    sessionContext.stop(socket)
     cancelTimer
   }
+
+  def destroyAbnormally = {
+    sessionContext.stop(socket)
+    publishWill
+    cancelTimer
+  }
+
+
 }
