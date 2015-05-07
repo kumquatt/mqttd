@@ -13,6 +13,10 @@ case class Subscribe(session: ActorRef) extends TopicRequest
 
 case class Unsubscribe(session: ActorRef) extends TopicRequest
 
+case class Subscribed(topicName: String) extends TopicResponse
+
+case class Unsubscribed(topicName: String) extends TopicResponse
+
 case object ClearList extends TopicRequest
 
 case class TopicInMessage(payload: Array[Byte], qos: Short, retain: Boolean, packetId: Option[Int]) extends TopicRequest
@@ -75,6 +79,7 @@ class Topic(name: String) extends Actor with ActorLogging {
       if (!subscriberMap.exists(_ == session))
         subscriberMap = subscriberMap.+(session)
 
+      sender ! Subscribed(name)
       printEverySubscriber
     }
 
@@ -82,6 +87,7 @@ class Topic(name: String) extends Actor with ActorLogging {
       log.debug("Unsubscribe client({}) topic({})", session.path.name, name)
       subscriberMap = subscriberMap.filter(_ != session)
 
+      sender ! Unsubscribed(name)
       printEverySubscriber
     }
 

@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 import akka.actor._
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.directory._
-import plantae.citrus.mqtt.actors.topic.{Subscribe, TopicOutMessage, TopicResponse, Unsubscribe}
+import plantae.citrus.mqtt.actors.topic._
 import plantae.citrus.mqtt.dto.connect.{ReturnCode, Will}
 import plantae.citrus.mqtt.packet._
 
@@ -241,26 +241,34 @@ class Session extends Actor with ActorLogging {
 
   def subscribeTopics(subscribe: SubscribePacket) = {
     val session = self
-    subscribe.topicFilter.map(tp => {
-      context.actorOf(Props(new Actor with ActorLogging {
-        override def receive = {
-          case request: DirectoryTopicRequest =>
-            SystemRoot.directoryProxy ! request
-          case DirectoryTopicResult(topicName, options) =>
-            options.par.foreach(actor => actor.tell(Subscribe(session), session))
 
-            connectionStatus match {
-              case Some(x) => x.socket ! MQTTOutboundPacket(
-                SubAckPacket(packetId = subscribe.packetId,
-                  returnCode = Range(0, subscribe.topicFilter.size).foldRight(List[Short]()) { (a, b) => b :+ 0.toShort })
-              )
-              case None =>
-            }
-            context.stop(self)
-        }
-      })) ! DirectoryTopicRequest(tp._1)
-    }
-    )
+
+    context.actorOf(SubscribeTopic.props(subscribe.topicFilter, session, connectionStatus,subscribe))
+//    subscribe.topicFilter.map(tp => {
+//      context.actorOf(Props(new Actor with ActorLogging {
+//        override def receive = {
+//          case request: DirectoryTopicRequest =>
+//            SystemRoot.directoryProxy ! request
+//          case DirectoryTopicResult(topicName, options) =>
+//            options.par.foreach(actor => actor.tell(Subscribe(session), session))
+//            context.become(gathering)
+//        }
+//
+//        def gathering: Receive = {
+//          case Subscribed(name) =>
+//            connectionStatus match {
+//              case Some(x) => x.socket ! MQTTOutboundPacket(
+//                SubAckPacket(packetId = subscribe.packetId,
+//                  returnCode = Range(0, subscribe.topicFilter.size).foldRight(List[Short]()) { (a, b) => b :+ 0.toShort })
+//              )
+//              case None =>
+//            }
+//            context.stop(self)
+//
+//        }
+//      })) ! DirectoryTopicRequest(tp._1)
+//    }
+//    )
   }
 
   def unsubscribeTopics(topics: List[String]) = {
@@ -304,5 +312,56 @@ class Session extends Actor with ActorLogging {
       case None => log.debug("invoke publish but no connection : child actor count - {}", context.children.foldLeft(List[String]())((x, ac) => x :+ ac.path.name))
     }
   }
+
+}
+
+object SubscribeTopic {
+  def props(topicFilter: List[(String, Short)], session: ActorRef, connectionStatus: Option[ConnectionStatus], subscribe: SubscribePacket ) = {
+    Props(classOf[SubscribeTopic], topicFilter, session, connectionStatus, subscribe)
+  }
+}
+
+class SubscribeTopic(topicFilter: List[(String, Short)],
+                     session: ActorRef,
+                     connectionStatus: Option[ConnectionStatus],
+                     subscribe: SubscribePacket) extends Actor with ActorLogging {
+
+  topicFilter.map( x => self ! DirectoryTopicRequest(x._1))
+  val topicFilterResult = scala.collection.mutable.Map[String, Short]()
+  var count = 0
+
+  override def receive = {
+    case request: DirectoryTopicRequest =>
+      log.debug("[SUBSCRIBE] : request({})", request.name)
+      SystemRoot.directoryProxy ! request
+    case DirectoryTopicResult(topicName, options) =>
+      options.par.foreach(actor => actor.tell(Subscribe(session), self))
+
+    case Subscribed(name) =>
+      topicFilterResult.put(name, 0.toShort)
+      count = count + 1
+      log.debug("[SUBSCIRBE] topicFilterCount({}) now({})", topicFilter.size, count)
+      if (count == topicFilter.size) {
+        val result = topicFilter.map( x =>
+          topicFilterResult.get(x._1) match {
+            case Some(y) => y
+            case None => 0x80.toShort
+          }
+        )
+
+        log.debug("[SUBSCRIBE] : result ({})", result)
+
+        connectionStatus match {
+          case Some(x) => x.socket ! MQTTOutboundPacket(
+            SubAckPacket(packetId = subscribe.packetId,
+              returnCode = result)
+          )
+          case None =>
+        }
+        context.stop(self)
+      }
+  }
+    // TODO : need timed out
+    // deadletter created by topic actor but it will be thrown away by default.
 
 }
