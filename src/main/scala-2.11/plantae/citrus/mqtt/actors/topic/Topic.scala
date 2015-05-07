@@ -2,7 +2,8 @@ package plantae.citrus.mqtt.actors.topic
 
 import akka.actor._
 
-import scala.collection.mutable.Map
+import scala.collection
+import scala.collection.parallel.mutable
 import scala.util.Random
 
 sealed trait TopicRequest
@@ -71,13 +72,13 @@ class TopicRoot extends Actor with ActorLogging {
 }
 
 class Topic(name: String) extends Actor with ActorLogging {
-  private var subscriberMap: Set[ActorRef] = Set()
+  private val subscriberMap: collection.mutable.HashSet[ActorRef] = collection.mutable.HashSet()
 
   def receive = {
     case Subscribe(session) => {
       log.debug("Subscribe client({}) topic({})", session.path.name, name)
-      if (!subscriberMap.exists(_ == session))
-        subscriberMap = subscriberMap.+(session)
+      if (!subscriberMap.contains(session))
+        subscriberMap.+= (session)
 
       sender ! Subscribed(name)
       printEverySubscriber
@@ -85,7 +86,8 @@ class Topic(name: String) extends Actor with ActorLogging {
 
     case Unsubscribe(session) => {
       log.debug("Unsubscribe client({}) topic({})", session.path.name, name)
-      subscriberMap = subscriberMap.filter(_ != session)
+
+      subscriberMap.-=(session)
 
       sender ! Unsubscribed(name)
       printEverySubscriber
@@ -93,7 +95,7 @@ class Topic(name: String) extends Actor with ActorLogging {
 
     case ClearList => {
       log.debug("Clear subscriber list")
-      subscriberMap = Set()
+      subscriberMap.clear()
       printEverySubscriber
     }
 
