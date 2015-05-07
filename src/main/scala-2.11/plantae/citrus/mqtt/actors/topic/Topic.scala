@@ -2,6 +2,7 @@ package plantae.citrus.mqtt.actors.topic
 
 import akka.actor._
 
+import scala.collection.mutable.Map
 import scala.collection
 import scala.collection.parallel.mutable
 import scala.util.Random
