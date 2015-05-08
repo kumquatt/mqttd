@@ -57,7 +57,7 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
 
   when(WaitPublish) {
     case Event(publish: PublishPacket, _) =>
-      log.debug(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
+      log.info(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
       client ! MQTTOutboundPacket(publish)
       publish.fixedHeader.qos match {
         case 0 =>
