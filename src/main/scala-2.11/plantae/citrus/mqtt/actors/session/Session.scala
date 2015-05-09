@@ -4,11 +4,13 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
+import io.wasted.util.Base64
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.directory._
 import plantae.citrus.mqtt.actors.topic._
 import plantae.citrus.mqtt.dto.connect.{ReturnCode, Will}
 import plantae.citrus.mqtt.packet._
+
 
 case class MQTTInboundPacket(mqttPacket: ControlPacket)
 
@@ -33,21 +35,21 @@ class SessionRoot extends Actor with ActorLogging {
     case clientId: String => {
       context.child(clientId) match {
         case Some(x) => sender ! x
-        case None => log.debug("new session is created [{}]", clientId)
-          sender ! context.actorOf(Props[Session], clientId)
+        case None => log.debug("new session is created [{}] base64({})", clientId, Base64.encodeString(clientId))
+          sender ! context.actorOf(Props[Session], Base64.encodeString(clientId))
       }
     }
 
     case SessionCreateRequest(clientId: String) => {
       context.child(clientId) match {
         case Some(x) => sender ! x
-        case None => log.debug("new session is created [{}]", clientId)
-          sender ! SessionCreateResponse(clientId, context.actorOf(Props[Session], clientId))
+        case None => log.debug("new session is created [{}] base64({})", clientId, Base64.encodeString(clientId))
+          sender ! SessionCreateResponse(clientId, context.actorOf(Props[Session], Base64.encodeString(clientId)))
       }
     }
 
     case SessionExistRequest(clientId) =>
-      sender ! SessionExistResponse(clientId, context.child(clientId))
+      sender ! SessionExistResponse(clientId, context.child(Base64.encodeString(clientId)))
 
   }
 }
@@ -88,6 +90,9 @@ class Session extends Actor with ActorLogging {
   def handleTopicPacket(response: TopicResponse, topic: ActorRef) {
     response match {
       case message: TopicOutMessage =>
+        if (message.topic == "a/b"){
+          log.info("[SESSION] payload({}) session({}) ", new String(message.payload),self.path)
+        }
         storage.persist(message.payload, message.qos, message.retain, message.topic)
         invokePublish
       case anyOtherTopicMessage =>
@@ -146,6 +151,7 @@ class Session extends Actor with ActorLogging {
 
   def handleMQTTPacket(packet: ControlPacket, bridge: ActorRef): Unit = {
 
+    log.error("packet {}", packet)
     resetTimer
 
     packet match {

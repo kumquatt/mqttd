@@ -12,7 +12,8 @@ enablePlugins(JavaAppPackaging)
 resolvers ++= {
   Seq(
     "repo" at "http://repo.typesafe.com/typesafe/releases/",
-    "Paho MQTT Client" at "https://repo.eclipse.org/content/repositories/paho-releases/"
+    "Paho MQTT Client" at "https://repo.eclipse.org/content/repositories/paho-releases/",
+    "wasted.io/repo" at "http://repo.wasted.io/mvn"
   )
 }
 
@@ -31,6 +32,8 @@ libraryDependencies ++= {
     "org.scodec" % "scodec-core_2.11" % "1.7.1",
     "org.eclipse.paho" % "org.eclipse.paho.client.mqttv3" % "1.0.2",
     "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test",
-    "com.typesafe" % "config" % "1.2.1"
+    "com.typesafe" % "config" % "1.2.1",
+
+    "io.wasted" % "wasted-util" % "0.9.0"
   )
 }
