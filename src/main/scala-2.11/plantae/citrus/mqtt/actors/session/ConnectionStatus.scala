@@ -17,11 +17,13 @@ import scala.concurrent.duration.FiniteDuration
 case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: ActorRef, sessionContext: ActorContext, socket: ActorRef) {
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
-  private var keepAliveTimer: Cancellable = SystemRoot.system.scheduler.scheduleOnce(
+  private var keepAliveTimer: Cancellable =
+    if (keepAliveTime != 0) SystemRoot.system.scheduler.scheduleOnce(
     FiniteDuration(keepAliveTime, TimeUnit.SECONDS), session, SessionKeepAliveTimeOut)
+    else null
 
   def cancelTimer = {
-    keepAliveTimer.cancel()
+    if (keepAliveTimer != null) keepAliveTimer.cancel()
   }
 
   def resetTimer = {
