@@ -4,13 +4,11 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
-import io.wasted.util.Base64
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.directory._
 import plantae.citrus.mqtt.actors.topic._
 import plantae.citrus.mqtt.dto.connect.{ReturnCode, Will}
 import plantae.citrus.mqtt.packet._
-
 
 case class MQTTInboundPacket(mqttPacket: ControlPacket)
 
@@ -35,21 +33,21 @@ class SessionRoot extends Actor with ActorLogging {
     case clientId: String => {
       context.child(clientId) match {
         case Some(x) => sender ! x
-        case None => log.debug("new session is created [{}] base64({})", clientId, Base64.encodeString(clientId))
-          sender ! context.actorOf(Props[Session], Base64.encodeString(clientId))
+        case None => log.debug("new session is created [{}]", clientId)
+          sender ! context.actorOf(Props[Session], clientId)
       }
     }
 
     case SessionCreateRequest(clientId: String) => {
       context.child(clientId) match {
         case Some(x) => sender ! x
-        case None => log.debug("new session is created [{}] base64({})", clientId, Base64.encodeString(clientId))
-          sender ! SessionCreateResponse(clientId, context.actorOf(Props[Session], Base64.encodeString(clientId)))
+        case None => log.debug("new session is created [{}]", clientId)
+          sender ! SessionCreateResponse(clientId, context.actorOf(Props[Session], clientId))
       }
     }
 
     case SessionExistRequest(clientId) =>
-      sender ! SessionExistResponse(clientId, context.child(Base64.encodeString(clientId)))
+      sender ! SessionExistResponse(clientId, context.child(clientId))
 
   }
 }
@@ -90,9 +88,6 @@ class Session extends Actor with ActorLogging {
   def handleTopicPacket(response: TopicResponse, topic: ActorRef) {
     response match {
       case message: TopicOutMessage =>
-        if (message.topic == "a/b"){
-          log.info("[SESSION] payload({}) session({}) ", new String(message.payload),self.path)
-        }
         storage.persist(message.payload, message.qos, message.retain, message.topic)
         invokePublish
       case anyOtherTopicMessage =>
@@ -151,7 +146,6 @@ class Session extends Actor with ActorLogging {
 
   def handleMQTTPacket(packet: ControlPacket, bridge: ActorRef): Unit = {
 
-    log.error("packet {}", packet)
     resetTimer
 
     packet match {
@@ -296,7 +290,7 @@ class Session extends Actor with ActorLogging {
 }
 
 object SubscribeTopic {
-  def props(topicFilter: List[(String, Short)], session: ActorRef, connectionStatus: Option[ConnectionStatus], subscribe: SubscribePacket ) = {
+  def props(topicFilter: List[(String, Short)], session: ActorRef, connectionStatus: Option[ConnectionStatus], subscribe: SubscribePacket) = {
     Props(classOf[SubscribeTopic], topicFilter, session, connectionStatus, subscribe)
   }
 }
@@ -306,7 +300,7 @@ class SubscribeTopic(topicFilter: List[(String, Short)],
                      connectionStatus: Option[ConnectionStatus],
                      subscribe: SubscribePacket) extends Actor with ActorLogging {
 
-  topicFilter.map( x => self ! DirectoryTopicRequest(x._1))
+  topicFilter.map(x => self ! DirectoryTopicRequest(x._1))
   val topicFilterResult = scala.collection.mutable.Map[String, Short]()
   var count = 0
 
@@ -322,7 +316,7 @@ class SubscribeTopic(topicFilter: List[(String, Short)],
       count = count + 1
       log.debug("[SUBSCIRBE] topicFilterCount({}) now({})", topicFilter.size, count)
       if (count == topicFilter.size) {
-        val result = topicFilter.map( x =>
+        val result = topicFilter.map(x =>
           topicFilterResult.get(x._1) match {
             case Some(y) => y
             case None => 0x80.toShort
@@ -341,7 +335,7 @@ class SubscribeTopic(topicFilter: List[(String, Short)],
         context.stop(self)
       }
   }
-    // TODO : need timed out
-    // deadletter created by topic actor but it will be thrown away by default.
+  // TODO : need timed out
+  // deadletter created by topic actor but it will be thrown away by default.
 
 }

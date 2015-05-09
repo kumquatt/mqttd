@@ -3,7 +3,6 @@ package plantae.citrus.mqtt.actors.connection
 import akka.actor._
 import akka.io.Tcp.{PeerClosed, Received, Write}
 import akka.util.ByteString
-import io.wasted.util.Base64
 import plantae.citrus.mqtt.actors.SystemRoot
 import plantae.citrus.mqtt.actors.directory._
 import plantae.citrus.mqtt.actors.session._
@@ -39,7 +38,7 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
     case Event(Received(data), container: SessionCreateContainer) =>
       PacketDecoder.decode(BitVector(data)) match {
         case ((head: ConnectPacket) :: Nil, _) =>
-          SystemRoot.directoryProxy.tell(DirectorySessionRequest(Base64.encodeString(head.clientId)),
+          SystemRoot.directoryProxy.tell(DirectorySessionRequest(head.clientId),
             context.actorOf(Props(new Actor with ActorLogging {
               def receive = {
                 case DirectorySessionResult(session, isCreated) => {
@@ -85,7 +84,7 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
       socket ! Write(ByteString(Codec[ControlPacket].encode(packet).require.toByteBuffer))
       stay using container
 
-    case Event(disconnect : DisconnectPacket, container: RestByteContainer) =>
+    case Event(disconnect: DisconnectPacket, container: RestByteContainer) =>
       container.session ! MQTTInboundPacket(DisconnectPacket())
       stop(FSM.Shutdown)
 

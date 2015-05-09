@@ -104,12 +104,8 @@ class Topic(name: String) extends Actor with ActorLogging {
       log.info("[TOPIC] qos : {} , retain : {} , payload : {} , sender {} subscriberCount " + subscriberMap.size, qos, retain, new String(payload), sender )
       sender ! TopicInMessageAck
       val topicOutMessage = TopicOutMessage(payload, qos, retain, name)
-      val tempPaylodString = new String(payload)
       subscriberMap.par.foreach(
         (actor) => {
-          if (name == "a/b"){
-            log.info("[TOPIC] payloadString {} actorPath {}", tempPaylodString, actor.path)
-          }
           actor ! topicOutMessage
         }
       )
