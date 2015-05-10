@@ -45,6 +45,10 @@ object Paho extends App {
       println("client 1 => subscribe test complete")
 
       client2.subscribe("test")
+
+      client2.subscribe(Array("1", "1/1", "1/2", "1/3", "1/1/1", "1/1/1"), Array(1, 0, 0, 1, 2, 2))
+      client2.subscribe("1", 2)
+
 //      client1.subscribe("test")
 //      println("client 2 => subscribe test complete")
 //
@@ -80,16 +84,16 @@ object Paho extends App {
 //      client1.publish("test", "qos 2 message".getBytes, 2, false)
 //      println("publish complete qos 2")
 
-      println("sleep 10 seconds")
-
-      Range(1, 100000).foreach(x => {
-
-        client1.publish("test", "qos 2 count(%d) th ... message".format(x.toInt).getBytes, 2, false)
-        client1.publish("test", "qos 0 count(%d) th ... message".format(x.toInt).getBytes, 0, false)
-        client1.publish("test", "qos 1 count(%d) th ... message".format(x.toInt).getBytes, 2, false)
-        println("test count("+x+ ") message sned")
-//        Thread.sleep(10)
-      })
+//      println("sleep 10 seconds")
+//
+//      Range(1, 100000).foreach(x => {
+//
+//        client1.publish("test", "qos 2 count(%d) th ... message".format(x.toInt).getBytes, 2, false)
+//        client1.publish("test", "qos 0 count(%d) th ... message".format(x.toInt).getBytes, 0, false)
+//        client1.publish("test", "qos 1 count(%d) th ... message".format(x.toInt).getBytes, 2, false)
+//        println("test count("+x+ ") message sned")
+////        Thread.sleep(10)
+//      })
 
       Range(1, 100).foreach(x => {
         Thread.sleep(1000)

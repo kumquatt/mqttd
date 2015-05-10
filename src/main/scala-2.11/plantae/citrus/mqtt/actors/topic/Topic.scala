@@ -11,7 +11,7 @@ sealed trait TopicRequest
 
 sealed trait TopicResponse
 
-case class Subscribe(session: ActorRef) extends TopicRequest
+case class Subscribe(sessionAndQos: SessionAndQos) extends TopicRequest
 
 case class Unsubscribe(session: ActorRef) extends TopicRequest
 
@@ -72,14 +72,26 @@ class TopicRoot extends Actor with ActorLogging {
   }
 }
 
+case class SessionAndQos(session: ActorRef, qos: Short)
+
 class Topic(name: String) extends Actor with ActorLogging {
-  private val subscriberMap: collection.mutable.HashSet[ActorRef] = collection.mutable.HashSet()
+  private val subscriberMap2: collection.mutable.HashMap[ActorRef, Short] = collection.mutable.HashMap[ActorRef, Short]()
+//  private val subscriberMap: collection.mutable.HashSet[ActorRef] = collection.mutable.HashSet()
 
   def receive = {
-    case Subscribe(session) => {
-      log.debug("Subscribe client({}) topic({})", session.path.name, name)
-      if (!subscriberMap.contains(session))
-        subscriberMap.+= (session)
+
+    case Subscribe(sessionAndQos) => {
+      log.debug("Subscribe client({}) qos({}) topic({})", sessionAndQos.session.path.name, sessionAndQos.qos, name)
+      if (!subscriberMap2.contains(sessionAndQos.session))
+        subscriberMap2.+= ((sessionAndQos.session, sessionAndQos.qos))
+      else {
+        if (subscriberMap2.get(sessionAndQos.session).get < sessionAndQos.qos){
+          log.debug("Subscribe qos changed  qos(from({}) to({})) topic({})", subscriberMap2.get(sessionAndQos.session).get,
+            sessionAndQos.qos, name)
+          subscriberMap2.-=(sessionAndQos.session)
+          subscriberMap2.+=((sessionAndQos.session, sessionAndQos.qos))
+        }
+      }
 
       sender ! Subscribed(name)
       printEverySubscriber
@@ -88,7 +100,7 @@ class Topic(name: String) extends Actor with ActorLogging {
     case Unsubscribe(session) => {
       log.debug("Unsubscribe client({}) topic({})", session.path.name, name)
 
-      subscriberMap.-=(session)
+      subscriberMap2.-=(session)
 
       sender ! Unsubscribed(name)
       printEverySubscriber
@@ -96,17 +108,17 @@ class Topic(name: String) extends Actor with ActorLogging {
 
     case ClearList => {
       log.debug("Clear subscriber list")
-      subscriberMap.clear()
+      subscriberMap2.clear()
       printEverySubscriber
     }
 
     case TopicInMessage(payload, qos, retain, packetId) => {
-      log.info("[TOPIC] qos : {} , retain : {} , payload : {} , sender {} subscriberCount " + subscriberMap.size, qos, retain, new String(payload), sender )
+      log.info("[TOPIC] qos : {} , retain : {} , payload : {} , sender {} subscriberCount " + subscriberMap2.size, qos, retain, new String(payload), sender )
       sender ! TopicInMessageAck
-      val topicOutMessage = TopicOutMessage(payload, qos, retain, name)
-      subscriberMap.par.foreach(
-        (actor) => {
-          actor ! topicOutMessage
+
+      subscriberMap2.par.foreach(
+        (sessionAndQos) => {
+          sessionAndQos._1 ! TopicOutMessage(payload, sessionAndQos._2, retain, name)
         }
       )
     }
@@ -114,7 +126,7 @@ class Topic(name: String) extends Actor with ActorLogging {
 
   def printEverySubscriber = {
     log.debug("{}'s subscriber ", name)
-    subscriberMap.foreach(s => log.debug("{},", s))
+    subscriberMap2.foreach(s => log.debug("{},", s))
   }
 }
 

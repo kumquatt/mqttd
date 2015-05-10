@@ -309,7 +309,9 @@ class SubscribeTopic(topicFilter: List[(String, Short)],
       log.debug("[SUBSCRIBE] : request({})", request.name)
       SystemRoot.directoryProxy ! request
     case DirectoryTopicResult(topicName, options) =>
-      options.par.foreach(actor => actor.tell(Subscribe(session), self))
+      val qos = topicFilter.foldRight[Short](0)((a,b) => if (a._1 == topicName) a._2 else b)
+      log.debug("[SUBSCRIBE] : session({}) qos({})", session, qos)
+      options.par.foreach(actor => actor.tell(Subscribe(SessionAndQos(session, qos)), self))
 
     case Subscribed(name) =>
       topicFilterResult.put(name, 0.toShort)
