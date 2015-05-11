@@ -13,7 +13,15 @@ import scodec.bits.ByteVector
 
 class Storage(sessionName: String) extends Serializable {
   private val log = LoggerFactory.getLogger(getClass() + sessionName)
-  private val chunkSize = 200
+  private val chunkSize = {
+    try {
+      if (SystemRoot.config.hasPath("mqtt.broker.session.chunk.size"))
+        SystemRoot.config.getInt("mqtt.broker.session.chunk.size")
+      else 200
+    } catch {
+      case t: Throwable => 200
+    }
+  }
 
   sealed trait Location
 
