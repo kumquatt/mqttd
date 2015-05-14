@@ -142,13 +142,8 @@ class PublishWorker(topics: List[ActorRef], wildcardSessions: List[(ActorRef, Sh
     case Nil => self.tell(TopicSubscribers(List()), self)
     case x => x.foreach(y => y.tell(TopicGetSubscribers, self))
   }
+
   def receive = {
-//    case request: Publish =>
-//      log.debug("PublishWorker {} {}", topics, wildcardSessions)
-//
-//      topics.foreach( x => x ! TopicMessagePublish(request.payload, request.retain, request.packetId, wildcardSessions))
-//      sender ! Published(request.packetId, true)
-//      context.stop(self)
     case response: TopicSubscribers =>
       val s = response.subscribers.toList ++ wildcardSessions.toList
       log.debug("PublishWorker {} {}", s, request)
