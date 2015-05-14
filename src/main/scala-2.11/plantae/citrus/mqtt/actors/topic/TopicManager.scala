@@ -1,8 +1,7 @@
 package plantae.citrus.mqtt.actors.topic
 
-import akka.actor.Actor.Receive
-import akka.actor.{ActorRef, Props, ActorLogging, Actor}
-import plantae.citrus.mqtt.actors.session.{PublishMessage, Session}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import plantae.citrus.mqtt.actors.session.PublishMessage
 import scodec.bits.ByteVector
 
 trait TopicRequest
@@ -80,28 +79,14 @@ class TopicManager extends Actor with ActorLogging {
     }
 
     case request: Publish => {
+      log.debug("[TopicManager] Publish {}", request)
       // 1. Get Every Topics
       val topics = topicTreeRoot.getNodes(request.topic)
-      val topics2 = wildcardTopicTreeRoot.matchedElements(request.topic)
-
-      topics2.filter(x => x != None).foreach(y => y.get.subscribers.foreach(z =>
-        z._1 ! PublishMessage(request.topic, z._2, request.payload)
-      ))
-
+      val topics2 = wildcardTopicTreeRoot.matchedElements(request.topic).flatten.map(x => x.subscribers.toList).flatten
 
       // 2. make actor with topic list
-      context.actorOf(PublishWorker.props(topics)).tell(request, sender)
+      context.actorOf(PublishWorker.props(topics, topics2, request, sender))
     }
-
-//    case request: Publish => {
-//
-//    }
-//      context.actorOf(Props(new Actor {
-//        def receive = {
-//          case _ =>
-//        }
-//      })).tell(request, sender)
-//    }
   }
 }
 
@@ -123,7 +108,9 @@ class SubscirbeWorker(something: List[(String, Short, List[ActorRef])]) extends 
         }}).toList
       log.debug("[SUBSCRIBEWORKER] {}", result)
       sender ! Subscribed(result)
+      context.stop(self)
     case _ =>
+
   }
 }
 
@@ -137,21 +124,43 @@ class UnsubscribeWorker(something: List[(String, List[ActorRef])]) extends Actor
   def receive = {
     // 3. unsubscribe every topic and send back a result with origin request
     case request: Unsubscribe =>
+      context.stop(self)
     case _ =>
   }
 }
 
 object PublishWorker {
-  def props(topics: List[ActorRef]) = {
-    Props(classOf[PublishWorker], topics)
+  def props(topics: List[ActorRef], wildcardSessions: List[(ActorRef, Short)], request: Publish, session: ActorRef) = {
+    Props(classOf[PublishWorker], topics, wildcardSessions, request, session)
   }
 }
 
-class PublishWorker(topics: List[ActorRef]) extends Actor with ActorLogging {
+// FIXME : change to FSM
+class PublishWorker(topics: List[ActorRef], wildcardSessions: List[(ActorRef, Short)], request: Publish, session: ActorRef) extends Actor with ActorLogging {
+
+  topics match {
+    case Nil => self.tell(TopicSubscribers(List()), self)
+    case x => x.foreach(y => y.tell(TopicGetSubscribers, self))
+  }
   def receive = {
-    case request: Publish =>
-      topics.foreach( x => x ! TopicMessagePublish(request.payload, request.retain, request.packetId))
-      sender ! Published(request.packetId, true)
+//    case request: Publish =>
+//      log.debug("PublishWorker {} {}", topics, wildcardSessions)
+//
+//      topics.foreach( x => x ! TopicMessagePublish(request.payload, request.retain, request.packetId, wildcardSessions))
+//      sender ! Published(request.packetId, true)
+//      context.stop(self)
+    case response: TopicSubscribers =>
+      val s = response.subscribers.toList ++ wildcardSessions.toList
+      log.debug("PublishWorker {} {}", s, request)
+      s.par.foreach(
+        //      subscriberMap.par.foreach(
+        x => {
+          x._1 ! PublishMessage(request.topic, x._2, request.payload)
+        }
+      )
+      log.debug("PUBLISHWORKER {}", session)
+      session ! Published(request.packetId, true)
+      context.stop(self)
     case _ =>
   }
 }

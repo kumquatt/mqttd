@@ -13,8 +13,10 @@ case class TopicSubscribed(topicName: String, result: Boolean)
 case class TopicUnsubscribe(session: ActorRef)
 case class TopicUnsubscribed(topicName: String, result: Boolean)
 case object TopicSubscriberClear
-case class TopicMessagePublish(payload: ByteVector, retain: Boolean, packetId: Option[Int])
-case object TopicMessagePublished
+//case class TopicMessagePublish(payload: ByteVector, retain: Boolean, packetId: Option[Int], wildcardSessions: List[(ActorRef, Short)])
+//case object TopicMessagePublished
+case object TopicGetSubscribers
+case class TopicSubscribers(subscribers: List[(ActorRef, Short)])
 
 object Topic {
   def props(topicName: String) = {
@@ -44,15 +46,34 @@ class Topic(topicName: String) extends Actor with ActorLogging {
     case TopicSubscriberClear =>
       log.debug("[NEWTOPIC]TopicSubscriberClear topic({})", topicName)
       subscriberMap.clear
-    case message: TopicMessagePublish =>
-      log.debug("[NEWTOPIC]TopiceMessagePublish topic({}) payload({}) message({})", topicName, new String(message.payload.toArray), message)
-      subscriberMap.par.foreach(
-        x => {
-          x._1 ! PublishMessage(topicName, x._2, message.payload)
-//          x._1 ! PublishPacket(FixedHeader(qos = x._2),topicName, message.packetId, message.payload)
-        }
-      )
-      sender ! TopicMessagePublished
+//    case message: TopicMessagePublish =>
+//      log.debug("[NEWTOPIC]TopiceMessagePublish topic({}) payload({}) message({})", topicName, new String(message.payload.toArray), message)
+//
+//      val ns = collection.mutable.HashMap[ActorRef, Short]() ++ subscriberMap
+//
+//      message.wildcardSessions.foreach(x => {
+//        ns.get(x._1) match {
+//          case Some(qos) =>
+//            if (qos < x._2) {
+//              ns.remove(x._1)
+//              ns.+=((x._1, x._2))
+//            }
+//          case None =>
+//            ns.+=((x._1, x._2))
+//        }
+//      })
+//
+//      log.debug("[NTOPIC] {}", ns)
+//      ns.par.foreach(
+//        //      subscriberMap.par.foreach(
+//        x => {
+//          x._1 ! PublishMessage(topicName, x._2, message.payload)
+//        }
+//      )
+//
+//      sender ! TopicMessagePublished
+    case TopicGetSubscribers =>
+      sender ! TopicSubscribers(subscriberMap.toList)
   }
 }
 
