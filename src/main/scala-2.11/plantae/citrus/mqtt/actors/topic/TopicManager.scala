@@ -33,35 +33,20 @@ class TopicManager extends Actor with ActorLogging {
       log.debug("[TOPICMANAGER] {}", request)
       // 1. Get Every Topics
       val something = request.topicFilter.map( tf => {
-        // 2. store session to widlcardtopic tree
-        if (tf.topic.contains("+") || tf.topic.contains("#")) {
+        // 2. store wildcardtopic
+        if (tf.topic.contains("+") || tf.topic.contains("#")){
           val wildcardNodes = wildcardTopicTreeRoot.getNode(tf.topic) match {
             case None =>
             case Some(elem) => elem.add((request.session, tf.qos))
           }
+          (tf.topic, tf.qos, List())
         } else {
-          val sessionNqoss = wildcardTopicTreeRoot.matchedElements(tf.topic).filter(_ != None).map(x => x.get.subscribers.toList).flatten
           val topicNodes = topicTreeRoot.getNodes(tf.topic) match {
-            case Nil => {
-              List(topicTreeRoot.addNode(tf.topic))
-            }
+            case Nil => List(topicTreeRoot.addNode(tf.topic))
             case nodes => nodes
           }
-
-          for (topicNode <- topicNodes; sessionNqos <- sessionNqoss){
-            topicNode ! TopicSubscribe(sessionNqos._1, sessionNqos._2, false)
-          }
+          (tf.topic, tf.qos, topicNodes)
         }
-
-        val topicNodes: List[ActorRef] = topicTreeRoot.getNodes(tf.topic) match {
-          case Nil => {
-            // create new node
-            if (tf.topic.contains("+") || tf.topic.contains("#")) List()
-            else List(topicTreeRoot.addNode(tf.topic))
-          }
-          case nodes => nodes
-        }
-        (tf.topic, tf.qos, topicNodes)
       })
 
       // 2. make actor with topic list
