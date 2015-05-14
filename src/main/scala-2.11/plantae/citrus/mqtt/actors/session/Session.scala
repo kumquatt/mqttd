@@ -4,11 +4,11 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
-import plantae.citrus.mqtt.actors._
-import plantae.citrus.mqtt.actors.directory._
-import plantae.citrus.mqtt.actors.topic._
+import plantae.citrus.mqtt.actors.SystemRoot
+import plantae.citrus.mqtt.actors.topic.{Subscribe, Subscribed, TopicNameQos}
 import plantae.citrus.mqtt.dto.connect.{ReturnCode, Will}
 import plantae.citrus.mqtt.packet._
+import scodec.bits.ByteVector
 
 case class MQTTInboundPacket(mqttPacket: ControlPacket)
 
@@ -27,6 +27,8 @@ case class SessionExistResponse(clientId: String, session: Option[ActorRef])
 case object SessionKeepAliveTimeOut extends SessionRequest
 
 case object ClientCloseConnection extends SessionRequest
+
+case class PublishMessage(topicName: String, qos: Short, payload: ByteVector)
 
 class SessionRoot extends Actor with ActorLogging {
   override def receive = {
@@ -71,7 +73,7 @@ class Session extends Actor with ActorLogging {
   override def receive: Receive = {
     case MQTTInboundPacket(packet) => handleMQTTPacket(packet, sender)
     case sessionRequest: SessionRequest => handleSession(sessionRequest)
-    case topicResponse: TopicResponse => handleTopicPacket(topicResponse, sender)
+    case publish: PublishMessage => handleTopicPacket(publish)
     case x: Outbound => handleOutboundPublish(x)
     case everythingElse => log.error("unexpected message : {}", everythingElse)
   }
@@ -85,14 +87,10 @@ class Session extends Actor with ActorLogging {
     }
   }
 
-  def handleTopicPacket(response: TopicResponse, topic: ActorRef) {
-    response match {
-      case message: TopicOutMessage =>
-        storage.persist(message.payload, message.qos, message.retain, message.topic)
-        invokePublish
-      case anyOtherTopicMessage =>
-        log.error(" unexpected topic message {}", anyOtherTopicMessage)
-    }
+  def handleTopicPacket(response: PublishMessage) {
+
+    storage.persist(response.payload.toArray, response.qos, false, response.topicName)
+    invokePublish
   }
 
 
@@ -231,8 +229,9 @@ class Session extends Actor with ActorLogging {
         subscribeTopics(subscribe)
 
       case unsubscribe: UnsubscribePacket =>
-        unsubscribeTopics(unsubscribe.topicFilter)
-        sender ! MQTTOutboundPacket(UnsubAckPacket(packetId = unsubscribe.packetId))
+      // TODO : 이거 구현 필요.
+      //        unsubscribeTopics(unsubscribe.topicFilter)
+      //        sender ! MQTTOutboundPacket(UnsubAckPacket(packetId = unsubscribe.packetId))
 
 
     }
@@ -242,23 +241,23 @@ class Session extends Actor with ActorLogging {
   def subscribeTopics(subscribe: SubscribePacket) = {
     val session = self
 
-    context.actorOf(SubscribeTopic.props(subscribe.topicFilter, session, connectionStatus,subscribe))
+    context.actorOf(SubscribeTopic.props(subscribe.topicFilter, session, connectionStatus, subscribe))
   }
 
-  def unsubscribeTopics(topics: List[String]) = {
-    val session = self
-    topics.foreach(x => {
-      SystemRoot.directoryProxy.tell(DirectoryTopicRequest(x), context.actorOf(Props(new Actor {
-        def receive = {
-          case DirectoryTopicResult(name, topicActors) =>
-            topicActors.par.foreach(actor => actor ! Unsubscribe(session))
-          //          topicActor != UNSUBSCRIBE
-        }
-      })))
-
-    }
-    )
-  }
+  //  def unsubscribeTopics(topics: List[String]) = {
+  //    val session = self
+  //    topics.foreach(x => {
+  //      SystemRoot.directoryProxy.tell(DirectoryTopicRequest(x), context.actorOf(Props(new Actor {
+  //        def receive = {
+  //          case DirectoryTopicResult(name, topicActors) =>
+  //            topicActors.par.foreach(actor => actor ! Unsubscribe(session))
+  //          //          topicActor != UNSUBSCRIBE
+  //        }
+  //      })))
+  //
+  //    }
+  //    )
+  //  }
 
   def invokePublish = {
     val session = self
@@ -300,44 +299,20 @@ class SubscribeTopic(topicFilter: List[(String, Short)],
                      connectionStatus: Option[ConnectionStatus],
                      subscribe: SubscribePacket) extends Actor with ActorLogging {
 
-  topicFilter.map(x => self ! DirectoryTopicRequest(x._1))
-  val topicFilterResult = scala.collection.mutable.Map[String, Short]()
-  var count = 0
+  SystemRoot.topicManager ! Subscribe(topicFilter.map(x => TopicNameQos(x._1, x._2)), session)
 
   override def receive = {
-    case request: DirectoryTopicRequest =>
-      log.debug("[SUBSCRIBE] : request({})", request.name)
-      SystemRoot.directoryProxy ! request
-    case DirectoryTopicResult(topicName, options) =>
-      val qos = topicFilter.foldRight[Short](0)((a,b) => if (a._1 == topicName) a._2 else b)
-      log.debug("[SUBSCRIBE] : session({}) qos({})", session, qos)
-      options.par.foreach(actor => actor.tell(Subscribe(SessionAndQos(session, qos)), self))
-
-    case Subscribed(name) =>
-      topicFilterResult.put(name, 0.toShort)
-      count = count + 1
-      log.debug("[SUBSCIRBE] topicFilterCount({}) now({})", topicFilter.size, count)
-      if (count == topicFilter.size) {
-        val result = topicFilter.map(x =>
-          topicFilterResult.get(x._1) match {
-            case Some(y) => y
-            case None => 0x80.toShort
-          }
-        )
-
-        log.debug("[SUBSCRIBE] : result ({})", result)
-
-        connectionStatus match {
-
-          case Some(x) => x.socket ! MQTTOutboundPacket(
-            SubAckPacket(packetId = subscribe.packetId, returnCode = result)
+    case response: Subscribed =>
+      log.debug("[SUBSCRIBETOPIC] {}", response)
+      connectionStatus match {
+        case Some(x) => {
+          log.debug("[SUBSCRIBETOPIC] send a result to {}", x)
+          x.socket ! MQTTOutboundPacket(
+            SubAckPacket(packetId = subscribe.packetId, returnCode = response.result)
           )
-          case None =>
         }
-        context.stop(self)
+        case None =>
       }
+      context.stop(self)
   }
-  // TODO : need timed out
-  // deadletter created by topic actor but it will be thrown away by default.
-
 }

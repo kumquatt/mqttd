@@ -81,6 +81,7 @@ class PacketBridge(socket: ActorRef) extends FSM[BridgeState, BridgeData] with A
 
   when(ConnectionEstablished) {
     case Event(MQTTOutboundPacket(packet: ControlPacket), container: RestByteContainer) =>
+      log.debug("PACKETBRIDGE] {}", packet)
       socket ! Write(ByteString(Codec[ControlPacket].encode(packet).require.toByteBuffer))
       stay using container
 

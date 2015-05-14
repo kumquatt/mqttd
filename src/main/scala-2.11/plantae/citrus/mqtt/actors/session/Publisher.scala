@@ -2,8 +2,7 @@ package plantae.citrus.mqtt.actors.session
 
 import akka.actor._
 import plantae.citrus.mqtt.actors.SystemRoot
-import plantae.citrus.mqtt.actors.directory.{DirectoryTopicRequest, DirectoryTopicResult}
-import plantae.citrus.mqtt.actors.topic.{TopicInMessage, TopicInMessageAck}
+import plantae.citrus.mqtt.actors.topic.{Published, Publish}
 import plantae.citrus.mqtt.packet._
 
 
@@ -126,7 +125,6 @@ class OutboundPublisher(client: ActorRef, session: ActorRef) extends FSM[Outboun
 
 }
 
-
 class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] with ActorLogging {
   val publishActor = self
 
@@ -153,18 +151,8 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
   when(WaitPublish) {
     case Event(publish: PublishPacket, _) =>
       log.debug(" actor-name : {} , status : {}", self.path.name, "WaitPublish")
-      SystemRoot.directoryProxy.tell(DirectoryTopicRequest(publish.topic), context.actorOf(Props(new Actor {
-        def receive = {
-          case DirectoryTopicResult(name, actors) =>
-            actors.foreach(actor =>
-              actor.tell(
-                TopicInMessage(publish.payload.toArray, publish.fixedHeader.qos, publish.fixedHeader.retain,
-                  publish.packetId), publishActor)
-            )
-          //            context.stop(self)
-        }
-      }
-      )))
+      SystemRoot.topicManager! Publish(publish.topic,publish.payload, publish.fixedHeader.retain, publish.packetId)
+
       publish.fixedHeader.qos match {
         case 0 => goto(WaitTopicResponseQos0)
         case 1 => goto(WaitTopicResponseQos1)
@@ -180,7 +168,7 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
 
 
   when(WaitTopicResponseQos0) {
-    case Event(TopicInMessageAck, _) =>
+    case Event(p:Published, _) =>
       log.debug(" actor-name : {} , status : {}", self.path.name, "WaitTopicResponseQos0")
 
       stop(FSM.Shutdown)
@@ -194,7 +182,7 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
 
 
   when(WaitTopicResponseQos1) {
-    case Event(TopicInMessageAck, _) =>
+    case Event(p:Published, _) =>
       packetId match {
         case Some(x) =>
           log.debug(" actor-name : {} , status : {}", self.path.name, "WaitTopicResponseQos1")
@@ -210,7 +198,7 @@ class InboundPublisher(client: ActorRef, qos: Short) extends FSM[Inbound, Any] w
   }
 
   when(WaitTopicResponseQos2) {
-    case Event(TopicInMessageAck, _) =>
+    case Event(p:Published, _) =>
       packetId match {
         case Some(x) =>
           log.debug(" actor-name : {} , status : {}", self.path.name, "WaitTopicResponseQos2")

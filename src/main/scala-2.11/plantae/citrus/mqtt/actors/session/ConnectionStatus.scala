@@ -4,8 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor._
 import plantae.citrus.mqtt.actors.SystemRoot
-import plantae.citrus.mqtt.actors.directory._
-import plantae.citrus.mqtt.actors.topic.TopicInMessage
+import plantae.citrus.mqtt.actors.topic.Publish
 import plantae.citrus.mqtt.dto.connect.Will
 
 import scala.concurrent.ExecutionContext
@@ -39,23 +38,8 @@ case class ConnectionStatus(will: Option[Will], keepAliveTime: Int, session: Act
   private def publishWill = {
     will match {
       case Some(x) =>
-        SystemRoot.directoryProxy.tell(DirectoryTopicRequest(x.topic), sessionContext.actorOf(Props(new Actor {
-          def receive = {
-            case DirectoryTopicResult(name, actors) =>
-              val topicInMessage = TopicInMessage(x.message.toArray, x.qos, x.retain, x.qos match {
-                case 0 => None
-                case qos if (qos > 0) => Some(0)
-              })
-
-              actors.foreach {
-                _.tell(topicInMessage, ActorRef.noSender)
-              }
-
-              context.stop(self)
-          }
-        }
-        )))
-
+      // TODO : will qos
+        SystemRoot.topicManager! Publish(x.topic, x.message, x.retain, None)
       case None =>
     }
   }

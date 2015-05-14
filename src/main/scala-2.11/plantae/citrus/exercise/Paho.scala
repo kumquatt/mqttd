@@ -20,7 +20,7 @@ object Paho extends App {
         }
       )
       option.setKeepAliveInterval(10)
-      option.setWill("test", "test will message".getBytes, 2, true)
+//      option.setWill("test", "test will message".getBytes, 2, true)
       client1.connect(option)
       println("client1 1 => connection complete")
 
@@ -41,14 +41,36 @@ object Paho extends App {
 
       client2.connect(option)
 
+//      client2.subscribe("test")
+//      client1.publish("test", "0000".getBytes, 0, false)
+//      client1.publish("test", "0000".getBytes, 0, false)
+//      client1.publish("test", "0000".getBytes, 0, false)
+//      client1.publish("test", "0000".getBytes, 0, false)
+//      client1.publish("test", "1111".getBytes, 1, false)
+//      client1.publish("test", "2222".getBytes, 2, false)
 //      client1.subscribe("test")
-      println("client 1 => subscribe test complete")
+//      println("client 1 => subscribe test complete")
+//
 
-      client2.subscribe("test")
+      client2.subscribe(Array("TopicA/#", "TopicA/+"), Array(2, 1))
+      client1.subscribe("TopicA/C")
 
-      client2.subscribe(Array("1", "1/1", "1/2", "1/3", "1/1/1", "1/1/1"), Array(1, 0, 0, 1, 2, 2))
-      client2.subscribe("1", 2)
+      client1.publish("TopicA/C", "aaaaa".getBytes, 2, false)
 
+//      client2.subscribe("test")
+//      println("....")
+//
+//      client2.subscribe(Array("1", "1/1", "1/2", "1/3", "1/1/1", "1/1/1"), Array(1, 0, 0, 1, 2, 2))
+//      println("....")
+//      client1.subscribe("1/+")
+//
+//      client1.publish("test", "test topic".getBytes, 0, false)
+//      client1.publish("1/2", "1/2 topic".getBytes, 0, false)
+//
+//
+//      client1.publish("1/4", "1/4 topic".getBytes, 0, false)
+//      client2.subscribe("1/4")
+//      client1.publish("1/4", "1/4 topic".getBytes, 0, false)
 //      client1.subscribe("test")
 //      println("client 2 => subscribe test complete")
 //

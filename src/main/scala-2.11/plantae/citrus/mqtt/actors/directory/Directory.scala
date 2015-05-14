@@ -7,7 +7,6 @@ import akka.cluster.ClusterEvent._
 import akka.cluster._
 import plantae.citrus.mqtt.actors._
 import plantae.citrus.mqtt.actors.session.{SessionCreateRequest, SessionCreateResponse, SessionExistRequest, SessionExistResponse}
-import plantae.citrus.mqtt.actors.topic.{TopicCreateRequest, TopicCreateResponse, TopicExistRequest, TopicExistResponse}
 
 import scala.concurrent.ExecutionContext
 
@@ -15,11 +14,7 @@ sealed trait DirectoryOperation
 
 case class DirectorySessionRequest(name: String) extends DirectoryOperation
 
-case class DirectoryTopicRequest(name: String) extends DirectoryOperation
-
 case class DirectorySessionResult(actor: ActorRef, isCreated: Boolean) extends DirectoryOperation
-
-case class DirectoryTopicResult(name: String, actors: List[ActorRef]) extends DirectoryOperation
 
 class DirectoryProxy extends Actor with ActorLogging {
   implicit val timeout = akka.util.Timeout(2, TimeUnit.SECONDS)
@@ -48,9 +43,6 @@ class DirectoryProxy extends Actor with ActorLogging {
     case request: DirectorySessionRequest =>
       context.actorOf(Props(classOf[ClusterAwareSessionDirectory], sender, directoryCluster)) ! request
 
-    case request: DirectoryTopicRequest =>
-      context.actorOf(Props(classOf[ClusterAwareTopicDirectory], sender, directoryCluster)) ! request
-
     case request: SessionExistRequest =>
       val originalSender = sender
       context.actorOf(Props(new Actor with ActorLogging {
@@ -72,26 +64,9 @@ class DirectoryProxy extends Actor with ActorLogging {
       })) ! request
 
 
-    case request: TopicExistRequest =>
-      val originalSender = sender
-      context.actorOf(Props(new Actor with ActorLogging {
-        override def receive = {
-          case request: TopicExistRequest => SystemRoot.topicRoot ! request
-          case response: TopicExistResponse => originalSender ! response
-            context.stop(self)
-        }
-      })) ! request
-
-
-    case request: TopicCreateRequest =>
-      val originalSender = sender
-      context.actorOf(Props(new Actor with ActorLogging {
-        override def receive = {
-          case request: TopicCreateRequest => SystemRoot.topicRoot ! request
-          case response: TopicCreateResponse => originalSender ! response
-            context.stop(self)
-        }
-      })) ! request
+      // SUBSCRIBE REQUEST ==> SUBSCRIBE RESPONSE
+      // UNSUBSCRIBE REQUEST ==> UNSUBSCIRBE RESPONSE
+      // PUBLISH REQUEST ==> PUBLISH RESPONSE
 
   }
 
@@ -144,41 +119,6 @@ class ClusterAwareSessionDirectory(originalSender: ActorRef, cluster: Set[ActorS
   when(CreateNew) {
     case Event(SessionCreateResponse(clientId, newActor), ScatterCount(0)) =>
       originalSender ! DirectorySessionResult(newActor, true)
-      stop(FSM.Shutdown)
-  }
-
-  initialize()
-}
-
-class ClusterAwareTopicDirectory(originalSender: ActorRef, cluster: Set[ActorSelection])
-  extends FSM[ClusterAwareState, ClusterAwareData] with ActorLogging {
-
-  startWith(Scatter, null)
-  when(Scatter) {
-
-    case Event(request: DirectoryTopicRequest, _) =>
-      cluster.foreach(_ ! TopicExistRequest(request.name))
-      goto(Gather) using ScatterCount(cluster.size)
-
-  }
-
-  when(Gather) {
-    case Event(TopicExistResponse(sessionId, session), ScatterCount(count)) =>
-
-      session match {
-        case Some(x) => originalSender ! DirectoryTopicResult(sessionId, x)
-          stop(FSM.Shutdown)
-        case None =>
-          if (count - 1 == 0) {
-            cluster.toList(sessionId.hashCode % cluster.size) ! TopicCreateRequest(sessionId)
-            goto(CreateNew) using ScatterCount(count - 1)
-          } else stay using ScatterCount(count - 1)
-      }
-  }
-
-  when(CreateNew) {
-    case Event(TopicCreateResponse(clientId, newActor), ScatterCount(0)) =>
-      originalSender ! DirectoryTopicResult(clientId, newActor)
       stop(FSM.Shutdown)
   }
 
