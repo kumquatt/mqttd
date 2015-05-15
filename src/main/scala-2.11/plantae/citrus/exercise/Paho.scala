@@ -13,7 +13,7 @@ object Paho extends App {
           override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
 
           override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
-            println("client1 1 => topic:" + s + "\tmessage:" + new String(mqttMessage.getPayload))
+            println("client1 1 => topic:" + s + "\tmessage:" + new String(mqttMessage.getPayload)+ " qos: " + mqttMessage.getQos)
           }
 
           override def connectionLost(throwable: Throwable): Unit = {}
@@ -31,7 +31,7 @@ object Paho extends App {
           override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
 
           override def messageArrived(s: String, mqttMessage: MqttMessage): Unit = {
-            println("client1 2 => topic:" + s + "\tmessage:" + new String(mqttMessage.getPayload))
+            println("client1 2 => topic:" + s + "\tmessage:" + new String(mqttMessage.getPayload) + " qos: " + mqttMessage.getQos)
           }
 
           override def connectionLost(throwable: Throwable): Unit = {}
@@ -41,21 +41,29 @@ object Paho extends App {
 
       client2.connect(option)
 
-//      client2.subscribe("test")
-//      client1.publish("test", "0000".getBytes, 0, false)
-//      client1.publish("test", "0000".getBytes, 0, false)
-//      client1.publish("test", "0000".getBytes, 0, false)
-//      client1.publish("test", "0000".getBytes, 0, false)
-//      client1.publish("test", "1111".getBytes, 1, false)
-//      client1.publish("test", "2222".getBytes, 2, false)
+//      client2.subscribe("TopicA", 2)
+//      client1.publish("TopicA", "0000".getBytes, 0, false)
+//      client1.publish("TopicA", "1111".getBytes, 1, false)
+//      client1.publish("TopicA", "2222".getBytes, 2, false)
 //      client1.subscribe("test")
-//      println("client 1 => subscribe test complete")
+      println("client 1 => subscribe test complete")
+
+      client2.subscribe("TopicA/#")
+      client2.disconnect()
+
+      client1.publish("TopicA/B", "aaaaa".getBytes, 2, false)
+      client1.publish("TopicA/C", "bbbbb".getBytes, 1, false)
+      option.setCleanSession(false)
+      client2.connect(option)
+
 //
 
-      client2.subscribe(Array("TopicA/#", "TopicA/+"), Array(2, 1))
-      client1.subscribe("TopicA/C")
+//      client2.subscribe(Array("TopicA/#", "TopicA/+"), Array(2, 1))
+//      client1.subscribe("TopicA/C")
 
-      client1.publish("TopicA/C", "aaaaa".getBytes, 2, false)
+//      client1.publish("TopicA/C", "aaaaa".getBytes, 0, false)
+
+//      client1.disconnect()
 
 //      client2.subscribe("test")
 //      println("....")
