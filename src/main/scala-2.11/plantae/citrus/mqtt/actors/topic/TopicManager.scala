@@ -25,75 +25,70 @@ case class Published(packetId: Option[Int], result: Boolean) extends TopicRespon
 
 class TopicManager extends Actor with ActorLogging {
   // have topic tree
-  val topicTreeRoot = new TopicNode("", null, context = context, root = true)
-  val wildcardTopicTreeRoot = new WildcardTopicNode[(ActorRef, Short)]("", root=true)
+  val nTopicTreeRoot = new TopicNode2("", null, context, true)
 
   def receive = {
     case request: Subscribe => {
       log.debug("[TOPICMANAGER] {}", request)
       // 1. Get Every Topics
-      val something = request.topicFilter.map( tf => {
-        // 2. store wildcardtopic
-        if (tf.topic.contains("+") || tf.topic.contains("#")){
-          val wildcardNodes = wildcardTopicTreeRoot.getNode(tf.topic) match {
-            case None =>
-            case Some(elem) => elem.add((request.session, tf.qos))
-          }
-          (tf.topic, tf.qos, List())
-        } else {
-          val topicNodes = topicTreeRoot.getNodes(tf.topic) match {
-            case Nil => List(topicTreeRoot.addNode(tf.topic))
-            case nodes => nodes
-          }
-          (tf.topic, tf.qos, topicNodes)
-        }
+      val arg = request.topicFilter.map( tf => {
+        (tf.topic, tf.qos, nTopicTreeRoot.getTopicNode(tf.topic))
       })
 
       // 2. make actor with topic list
-      context.actorOf(SubscirbeWorker.props(something)).tell(request, sender)
+      context.actorOf(SubscirbeWorker.props(arg)).tell(request, sender)
     }
     case request: Unsubscribe => {
-      // 1. Get Every Topics
-      val something = request.topicFilter.map( tf => {
-        val topicNodes: List[ActorRef] = topicTreeRoot.getNodes(tf.topic)
-        (tf.topic, topicNodes)
-      })
-
-      // 2. make actor with topic list
-      context.actorOf(UnsubscribeWorker.props(something)).tell(request, sender)
+//      // 1. Get Every Topics
+//      val something = request.topicFilter.map( tf => {
+//        val topicNodes: List[ActorRef] = nTopicTreeRoot.getTopicNode(tf.topic)
+//        (tf.topic, topicNodes)
+//      })
+//
+//      // 2. make actor with topic list
+//      context.actorOf(UnsubscribeWorker.props(something)).tell(request, sender)
     }
 
     case request: Publish => {
       log.debug("[TopicManager] Publish {}", request)
       // 1. Get Every Topics
-      val topics = topicTreeRoot.getNodes(request.topic)
-      val topics2 = wildcardTopicTreeRoot.matchedElements(request.topic).flatten.map(x => x.subscribers.toList).flatten
+      val topics = nTopicTreeRoot.matchedTopicNodes(request.topic)
 
       // 2. make actor with topic list
-      context.actorOf(PublishWorker.props(topics, topics2, request, sender))
+      context.actorOf(PublishWorker.props(topics, request, sender))
     }
   }
 }
 
 object SubscirbeWorker {
-  def props(something: List[(String, Short, List[ActorRef])]) = {
-    Props(classOf[SubscirbeWorker], something)
+  def props(arg: List[(String, Short, ActorRef)]) = {
+    Props(classOf[SubscirbeWorker], arg)
   }
 }
 
-class SubscirbeWorker(something: List[(String, Short, List[ActorRef])]) extends Actor with ActorLogging {
+class SubscirbeWorker(something: List[(String, Short, ActorRef)]) extends Actor with ActorLogging {
+  var count = 0
+
   def receive = {
     // 3. subscribe every topic and send back a result with origin request
     case request: Subscribe =>
       log.debug("[SUBSCRIBEWORKER] {}", request)
       val result = something.map(_ match {
-        case(topicName, qos, sessions) => {
-          sessions.foreach(s => s ! TopicSubscribe(request.session, qos, false))
+        case(topicName, qos, topic) => {
+          topic ! TopicSubscribe(request.session, qos, false)
           0.toShort
         }}).toList
       log.debug("[SUBSCRIBEWORKER] {}", result)
-      sender ! Subscribed(result)
-      context.stop(self)
+
+    case response: TopicSubscribed => {
+      count = count + 1
+
+      if (something.size == count) {
+        val result = something.map(x => 0.toShort)
+        sender ! Subscribed(result)
+        context.stop(self)
+      }
+    }
     case _ =>
 
   }
@@ -115,32 +110,39 @@ class UnsubscribeWorker(something: List[(String, List[ActorRef])]) extends Actor
 }
 
 object PublishWorker {
-  def props(topics: List[ActorRef], wildcardSessions: List[(ActorRef, Short)], request: Publish, session: ActorRef) = {
-    Props(classOf[PublishWorker], topics, wildcardSessions, request, session)
+  def props(topics: List[ActorRef], request: Publish, session: ActorRef) = {
+    Props(classOf[PublishWorker], topics, request, session)
   }
 }
 
 // FIXME : change to FSM
-class PublishWorker(topics: List[ActorRef], wildcardSessions: List[(ActorRef, Short)], request: Publish, session: ActorRef) extends Actor with ActorLogging {
+class PublishWorker(topics: List[ActorRef], request: Publish, session: ActorRef) extends Actor with ActorLogging {
 
+  var count = 0
+  var subscribers = scala.collection.mutable.Set[(ActorRef, Short)]()
   topics match {
-    case Nil => self.tell(TopicSubscribers(List()), self)
     case x => x.foreach(y => y.tell(TopicGetSubscribers, self))
   }
 
   def receive = {
     case response: TopicSubscribers =>
-      val s = response.subscribers.toList ++ wildcardSessions.toList
-      log.debug("PublishWorker {} {}", s, request)
-      s.par.foreach(
-        //      subscriberMap.par.foreach(
+      count = count + 1
+
+//      subscribers.append(response.subscribers)
+      subscribers = subscribers.++(response.subscribers)
+
+      log.debug("PUBLISHWORKER {} {}/{}", subscribers, count, topics.size)
+
+      if (topics.size == count) {
+        log.debug("PublishWorker {}", subscribers)
+        subscribers.par.foreach(
         x => {
           x._1 ! PublishMessage(request.topic, x._2, request.payload)
         }
-      )
-      log.debug("PUBLISHWORKER {}", session)
-      session ! Published(request.packetId, true)
-      context.stop(self)
+        )
+        session ! Published(request.packetId, true)
+        context.stop(self)
+      }
     case _ =>
   }
 }
