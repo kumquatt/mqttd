@@ -282,6 +282,7 @@ object SubscribeTopic {
   }
 }
 
+// TODO : using FSM
 class SubscribeTopic(topicFilter: List[(String, Short)],
                      session: ActorRef,
                      connectionStatus: Option[ConnectionStatus],
@@ -311,6 +312,7 @@ object UnsubscribeTopic {
   }
 }
 
+// TODO: using FSM
 class UnsubscribeTopic(topicFilter: List[String],
                      session: ActorRef,
                      connectionStatus: Option[ConnectionStatus],

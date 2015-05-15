@@ -159,7 +159,8 @@ class PublishWorker(topics: List[ActorRef],  session: ActorRef)
 
   when(Init) {
     case Event(publish: Publish, _) =>
-      log.debug("[PublishWorker] init {}", publish)
+      log.debug("[PublishWorker] init {} {}", publish, topics)
+      if (topics.size == 0) session ! Published(publish.packetId, true)
       topics match {
         case x => x.foreach(y => y.tell(TopicGetSubscribers, self))
       }
