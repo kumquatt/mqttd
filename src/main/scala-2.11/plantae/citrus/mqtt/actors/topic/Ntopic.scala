@@ -9,13 +9,19 @@ import scala.collection.mutable.Set
 import scala.util.Random
 
 case class TopicSubscribe(session: ActorRef, qos: Short, reply: Boolean = true)
+
 case class TopicSubscribed(topicName: String, result: Boolean)
+
 case class TopicUnsubscribe(session: ActorRef)
+
 case class TopicUnsubscribed(topicName: String, result: Boolean)
+
 case object TopicSubscriberClear
+
 //case class TopicMessagePublish(payload: ByteVector, retain: Boolean, packetId: Option[Int], wildcardSessions: List[(ActorRef, Short)])
 //case object TopicMessagePublished
 case object TopicGetSubscribers
+
 case class TopicSubscribers(subscribers: List[(ActorRef, Short)])
 
 object Topic {
@@ -23,6 +29,7 @@ object Topic {
     Props(classOf[Topic], topicName)
   }
 }
+
 class Topic(topicName: String) extends Actor with ActorLogging {
   private val subscriberMap: collection.mutable.HashMap[ActorRef, Short] = collection.mutable.HashMap[ActorRef, Short]()
 
@@ -32,7 +39,7 @@ class Topic(topicName: String) extends Actor with ActorLogging {
       log.debug("[NEWTOPIC]TopicSubscribe topic({}) client({}) qos({})", topicName, session.path.name, qos)
       if (!subscriberMap.contains(session)) subscriberMap.+=((session, qos))
       else {
-        if (subscriberMap.get(session).get < qos){
+        if (subscriberMap.get(session).get < qos) {
           subscriberMap.-=(session)
           subscriberMap.+=((session, qos))
         }
@@ -46,43 +53,43 @@ class Topic(topicName: String) extends Actor with ActorLogging {
     case TopicSubscriberClear =>
       log.debug("[NEWTOPIC]TopicSubscriberClear topic({})", topicName)
       subscriberMap.clear
-//    case message: TopicMessagePublish =>
-//      log.debug("[NEWTOPIC]TopiceMessagePublish topic({}) payload({}) message({})", topicName, new String(message.payload.toArray), message)
-//
-//      val ns = collection.mutable.HashMap[ActorRef, Short]() ++ subscriberMap
-//
-//      message.wildcardSessions.foreach(x => {
-//        ns.get(x._1) match {
-//          case Some(qos) =>
-//            if (qos < x._2) {
-//              ns.remove(x._1)
-//              ns.+=((x._1, x._2))
-//            }
-//          case None =>
-//            ns.+=((x._1, x._2))
-//        }
-//      })
-//
-//      log.debug("[NTOPIC] {}", ns)
-//      ns.par.foreach(
-//        //      subscriberMap.par.foreach(
-//        x => {
-//          x._1 ! PublishMessage(topicName, x._2, message.payload)
-//        }
-//      )
-//
-//      sender ! TopicMessagePublished
+    //    case message: TopicMessagePublish =>
+    //      log.debug("[NEWTOPIC]TopiceMessagePublish topic({}) payload({}) message({})", topicName, new String(message.payload.toArray), message)
+    //
+    //      val ns = collection.mutable.HashMap[ActorRef, Short]() ++ subscriberMap
+    //
+    //      message.wildcardSessions.foreach(x => {
+    //        ns.get(x._1) match {
+    //          case Some(qos) =>
+    //            if (qos < x._2) {
+    //              ns.remove(x._1)
+    //              ns.+=((x._1, x._2))
+    //            }
+    //          case None =>
+    //            ns.+=((x._1, x._2))
+    //        }
+    //      })
+    //
+    //      log.debug("[NTOPIC] {}", ns)
+    //      ns.par.foreach(
+    //        //      subscriberMap.par.foreach(
+    //        x => {
+    //          x._1 ! PublishMessage(topicName, x._2, message.payload)
+    //        }
+    //      )
+    //
+    //      sender ! TopicMessagePublished
     case TopicGetSubscribers =>
       sender ! TopicSubscribers(subscriberMap.toList)
   }
 }
 
-case class TopicNode(name: String, topicActor: ActorRef,  children: Map[String, TopicNode] = Map[String, TopicNode](), context: ActorRefFactory, root: Boolean = false){
+case class TopicNode(name: String, topicActor: ActorRef, children: Map[String, TopicNode] = Map[String, TopicNode](), context: ActorRefFactory, root: Boolean = false) {
   def pathToList(path: String): List[String] = {
     path.split("/").toList
   }
 
-  def addNode(path: String): ActorRef ={
+  def addNode(path: String): ActorRef = {
     addNode(pathToList(path))
   }
 
@@ -93,9 +100,9 @@ case class TopicNode(name: String, topicActor: ActorRef,  children: Map[String, 
         val node: TopicNode = children.get(x) match {
           case Some(node) => node
           case None => {
-            val newNodeName = if(root==false) name +"/"+x else x
+            val newNodeName = if (root == false) name + "/" + x else x
             val newTopicActor = context.actorOf(Topic.props(newNodeName), Random.alphanumeric.take(128).mkString)
-            val node = TopicNode(name = newNodeName, topicActor = newTopicActor,context = context)
+            val node = TopicNode(name = newNodeName, topicActor = newTopicActor, context = context)
 
             children.+=((x, node))
 
@@ -108,7 +115,7 @@ case class TopicNode(name: String, topicActor: ActorRef,  children: Map[String, 
         val node: TopicNode = children.get(x) match {
           case Some(node) => node
           case None => {
-            val newNodeName = if(root==false) name +"/"+x else x
+            val newNodeName = if (root == false) name + "/" + x else x
             val newTopicActor = context.actorOf(Topic.props(newNodeName), Random.alphanumeric.take(128).mkString)
             val node = TopicNode(name = newNodeName, topicActor = newTopicActor, context = context)
             children.+=((x, node))
@@ -175,43 +182,44 @@ case class TopicNode(name: String, topicActor: ActorRef,  children: Map[String, 
     }).flatten.toList
 
     // include my topic Actor
-    if(!root) topicActor :: childrenNodes else childrenNodes
+    if (!root) topicActor :: childrenNodes else childrenNodes
   }
 }
 
-object Test extends App {
-  val system = ActorSystem()
-  val topicTreeRoot = TopicNode("", null, context = system, root = true)
+//object Test extends App {
+//  val system = ActorSystem()
+//  val topicTreeRoot = TopicNode("", null, context = system, root = true)
+//
+//  topicTreeRoot.addNode("a/b/c")
+//  topicTreeRoot.addNode("a/b/c/1")
+//  topicTreeRoot.addNode("a/b/c/2")
+//  topicTreeRoot.addNode("a")
+//
+//  println(topicTreeRoot.getNodes("a/b/c/+"))
+//
+//  println("...")
+//
+//  println(topicTreeRoot.getNodes("a/#"))
+//
+//  println("...")
+//
+//  println(topicTreeRoot.getNodes(""))
+//
+//  topicTreeRoot.addNode("/a/b")
+//
+//  println("...")
+//
+//  println(topicTreeRoot.getNodes("#"))
+//
+//  println("...")
+//
+//  println(topicTreeRoot.getNodes("+"))
+//}
 
-  topicTreeRoot.addNode("a/b/c")
-  topicTreeRoot.addNode("a/b/c/1")
-  topicTreeRoot.addNode("a/b/c/2")
-  topicTreeRoot.addNode("a")
-
-  println(topicTreeRoot.getNodes("a/b/c/+"))
-
-  println("...")
-
-  println(topicTreeRoot.getNodes("a/#"))
-
-  println("...")
-
-  println(topicTreeRoot.getNodes(""))
-
-  topicTreeRoot.addNode("/a/b")
-
-  println("...")
-
-  println(topicTreeRoot.getNodes("#"))
-
-  println("...")
-
-  println(topicTreeRoot.getNodes("+"))
-}
-
-case class WildcardTopicElement[T](name: String){
+case class WildcardTopicElement[T](name: String) {
 
   val subscribers: Set[T] = Set[T]()
+
   def add(session: T) = {
     subscribers.add(session)
   }
@@ -221,7 +229,7 @@ case class WildcardTopicElement[T](name: String){
   }
 }
 
-case class WildcardTopicNode[T](name: String, elem: Option[WildcardTopicElement[T]] = None, children: Map[String, WildcardTopicNode[T]] = Map[String, WildcardTopicNode[T]](), root: Boolean = false ){
+case class WildcardTopicNode[T](name: String, elem: Option[WildcardTopicElement[T]] = None, children: Map[String, WildcardTopicNode[T]] = Map[String, WildcardTopicNode[T]](), root: Boolean = false) {
   def pathToList(path: String): List[String] = {
     path.split("/").toList
   }
@@ -240,7 +248,7 @@ case class WildcardTopicNode[T](name: String, elem: Option[WildcardTopicElement[
         children.get(x) match {
           case Some(node) => node.elem
           case None => {
-            val newNodeName = if(!root) name + "/" + x else x
+            val newNodeName = if (!root) name + "/" + x else x
             val newNode = WildcardTopicNode[T](newNodeName, Some(WildcardTopicElement[T](newNodeName)))
             children.+=((x, newNode))
             newNode.elem
@@ -251,7 +259,7 @@ case class WildcardTopicNode[T](name: String, elem: Option[WildcardTopicElement[
         children.get(x) match {
           case Some(node) => node.addNode(others)
           case None => {
-            val newNodeName = if(!root) name + "/" + x else x
+            val newNodeName = if (!root) name + "/" + x else x
             val newNode = WildcardTopicNode[T](newNodeName, Some(WildcardTopicElement[T](newNodeName)))
             children.+=((x, newNode))
 
@@ -317,44 +325,44 @@ case class WildcardTopicNode[T](name: String, elem: Option[WildcardTopicElement[
   }
 }
 
-object Test2 extends App {
-  val topicRoot = WildcardTopicNode[String]("", root=true)
-  topicRoot.addNode("a/b/+").get.add("c1")
-  topicRoot.addNode("+/+").get.add("c2")
-  topicRoot.addNode("a/#").get.add("c3")
-  topicRoot.addNode("a/b/+").get.add("c4")
-  topicRoot.addNode("a/+/1").get.add("c5")
-  topicRoot.addNode("a/+/1").get.add("c6")
-  topicRoot.addNode("a/+/1").get.add("c7")
-  topicRoot.addNode("#").get.add("c8")
-
-  val a = topicRoot.matchedElements("a/b/c")
-  println(topicRoot.matchedElements("a/b/c"))
-  topicRoot.matchedElements("a/b/c").foreach(x => println(x match {
-    case Some(elem) => elem.subscribers
-  }))
-  println(topicRoot.matchedElements("a/b/1"))
-  topicRoot.matchedElements("a/b/1").foreach(x => println(x match {
-    case Some(elem) => elem.subscribers
-  }))
-  println(topicRoot.matchedElements("x/y"))
-  topicRoot.matchedElements("x/y").foreach(x => println(x match {
-    case Some(elem) => elem.subscribers
-  }))
-
-  println(topicRoot.matchedElements(""))
-  topicRoot.matchedElements("").foreach(x => println(x match {
-    case Some(elem) => elem.subscribers
-  }))
-
-  println(topicRoot.matchedElements("/a"))
-  topicRoot.matchedElements("/a").foreach(x => println(x match {
-    case Some(elem) => elem.subscribers
-  }))
-
-//  println(topicRoot.matchedElements("/"))
-//  topicRoot.matchedElements("/").foreach(x => println(x match {
+//object Test2 extends App {
+//  val topicRoot = WildcardTopicNode[String]("", root=true)
+//  topicRoot.addNode("a/b/+").get.add("c1")
+//  topicRoot.addNode("+/+").get.add("c2")
+//  topicRoot.addNode("a/#").get.add("c3")
+//  topicRoot.addNode("a/b/+").get.add("c4")
+//  topicRoot.addNode("a/+/1").get.add("c5")
+//  topicRoot.addNode("a/+/1").get.add("c6")
+//  topicRoot.addNode("a/+/1").get.add("c7")
+//  topicRoot.addNode("#").get.add("c8")
+//
+//  val a = topicRoot.matchedElements("a/b/c")
+//  println(topicRoot.matchedElements("a/b/c"))
+//  topicRoot.matchedElements("a/b/c").foreach(x => println(x match {
 //    case Some(elem) => elem.subscribers
 //  }))
-
-}
+//  println(topicRoot.matchedElements("a/b/1"))
+//  topicRoot.matchedElements("a/b/1").foreach(x => println(x match {
+//    case Some(elem) => elem.subscribers
+//  }))
+//  println(topicRoot.matchedElements("x/y"))
+//  topicRoot.matchedElements("x/y").foreach(x => println(x match {
+//    case Some(elem) => elem.subscribers
+//  }))
+//
+//  println(topicRoot.matchedElements(""))
+//  topicRoot.matchedElements("").foreach(x => println(x match {
+//    case Some(elem) => elem.subscribers
+//  }))
+//
+//  println(topicRoot.matchedElements("/a"))
+//  topicRoot.matchedElements("/a").foreach(x => println(x match {
+//    case Some(elem) => elem.subscribers
+//  }))
+//
+////  println(topicRoot.matchedElements("/"))
+////  topicRoot.matchedElements("/").foreach(x => println(x match {
+////    case Some(elem) => elem.subscribers
+////  }))
+//
+//}
