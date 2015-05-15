@@ -1,7 +1,9 @@
 package plantae.citrus.mqtt.actors.topic
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import plantae.citrus.mqtt.actors.SystemRoot
 import plantae.citrus.mqtt.actors.session.PublishMessage
+import plantae.citrus.mqtt.actors.topic.TopicPublishRetainMessage
 import scodec.bits.ByteVector
 
 trait TopicRequest
@@ -23,6 +25,8 @@ case class Publish(topic: String, payload: ByteVector, retain: Boolean, packetId
 
 case class Published(packetId: Option[Int], result: Boolean) extends TopicResponse
 
+case class PublishRetain(topic: String, session: ActorRef)
+
 class TopicManager extends Actor with ActorLogging {
   // have topic tree
   val nTopicTreeRoot = new TopicNode2("", null, context, true)
@@ -32,6 +36,7 @@ class TopicManager extends Actor with ActorLogging {
       log.debug("[TOPICMANAGER] {}", request)
       // 1. Get Every Topics
       val arg = request.topicFilter.map( tf => {
+        log.debug("TOPICMANAGER!!!! {}", nTopicTreeRoot.matchedTopicNodes("#"))
         (tf.topic, tf.qos, nTopicTreeRoot.getTopicNode(tf.topic))
       })
 
@@ -52,10 +57,22 @@ class TopicManager extends Actor with ActorLogging {
     case request: Publish => {
       log.debug("[TopicManager] Publish {}", request)
       // 1. Get Every Topics
-      val topics = nTopicTreeRoot.matchedTopicNodes(request.topic)
+      if (request.retain == true){
+        log.debug("[TopicManager] Topic({}) Store retained message {} ", request.topic, request)
+        nTopicTreeRoot.getTopicNode(request.topic) ! TopicStoreRetainMessage(request.payload)
+      }
+
+      val topics = nTopicTreeRoot.matchedTopicNodesWithOutWildCard(request.topic)
 
       // 2. make actor with topic list
       context.actorOf(PublishWorker.props(topics, request, sender))
+    }
+
+    case publish: PublishRetain => {
+
+      val topics = nTopicTreeRoot.matchedTopicNodes(publish.topic)
+      log.debug("PublishRetain {} {}", topics, publish)
+      topics.foreach( x => x ! TopicPublishRetainMessage(publish.session))
     }
   }
 }
@@ -75,13 +92,16 @@ class SubscirbeWorker(something: List[(String, Short, ActorRef)]) extends Actor 
       log.debug("[SUBSCRIBEWORKER] {}", request)
       val result = something.map(_ match {
         case(topicName, qos, topic) => {
-          topic ! TopicSubscribe(request.session, qos, false)
+          topic ! TopicSubscribe(request.session, qos, true)
           0.toShort
         }}).toList
       log.debug("[SUBSCRIBEWORKER] {}", result)
 
     case response: TopicSubscribed => {
       count = count + 1
+      log.debug("[SUBSCRIBEWORKER] {} {}/{}", response, count, something.size)
+
+      if (response.newbie) SystemRoot.topicManager ! PublishRetain(response.topicName, response.session)
 
       if (something.size == count) {
         val result = something.map(x => 0.toShort)
@@ -128,7 +148,6 @@ class PublishWorker(topics: List[ActorRef], request: Publish, session: ActorRef)
     case response: TopicSubscribers =>
       count = count + 1
 
-//      subscribers.append(response.subscribers)
       subscribers = subscribers.++(response.subscribers)
 
       log.debug("PUBLISHWORKER {} {}/{}", subscribers, count, topics.size)
