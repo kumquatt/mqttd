@@ -7,7 +7,7 @@ object Paho extends App {
   new Thread() {
     override def run: Unit = {
       var option = new MqttConnectOptions()
-      var client1 = new MqttClient("tcp://127.0.0.1:1883", "customer_1")
+      var client1 = new MqttClient("tcp://127.0.0.1:1883", "cc1")
       client1.setCallback(
         new MqttCallback {
           override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
@@ -25,7 +25,7 @@ object Paho extends App {
       println("client1 1 => connection complete")
 
 
-      var client2 = new MqttClient("tcp://127.0.0.1:1883", "customer_2")
+      var client2 = new MqttClient("tcp://127.0.0.1:1883", "cc2")
       client2.setCallback(
         new MqttCallback {
           override def deliveryComplete(iMqttDeliveryToken: IMqttDeliveryToken): Unit = {}
@@ -41,14 +41,14 @@ object Paho extends App {
 
       client2.connect(option)
 
-//      client2.subscribe("TopicA", 2)
-//      client1.publish("TopicA", "0000".getBytes, 0, false)
-//      client1.publish("TopicA", "1111".getBytes, 1, false)
-//      client1.publish("TopicA", "2222".getBytes, 2, false)
-//      client1.subscribe("test")
+      client2.subscribe("TopicA", 2)
+      client1.publish("TopicA", "0000".getBytes, 0, false)
+      client1.publish("TopicA", "1111".getBytes, 1, false)
+      client1.publish("TopicA", "2222".getBytes, 2, false)
+      client1.subscribe("test")
       println("client 1 => subscribe test complete")
 
-      client2.subscribe("TopicA/#")
+      client2.subscribe("TopicA/B")
       client2.disconnect()
 
       client1.publish("TopicA/B", "aaaaa".getBytes, 2, false)

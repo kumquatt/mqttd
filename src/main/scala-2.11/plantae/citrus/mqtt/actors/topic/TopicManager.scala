@@ -1,6 +1,6 @@
 package plantae.citrus.mqtt.actors.topic
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor._
 import plantae.citrus.mqtt.actors.SystemRoot
 import plantae.citrus.mqtt.actors.session.PublishMessage
 import plantae.citrus.mqtt.actors.topic.TopicPublishRetainMessage
@@ -19,7 +19,7 @@ case class Subscribed(result: List[Short]) extends TopicResponse
 
 case class Unsubscribe(topicFilter: List[TopicName], session: ActorRef) extends TopicRequest
 
-//case class Unsubscribed extends TopicResponse
+case class Unsubscribed(result: List[Short]) extends TopicResponse
 
 case class Publish(topic: String, payload: ByteVector, retain: Boolean, packetId: Option[Int]) extends TopicRequest
 
@@ -41,17 +41,14 @@ class TopicManager extends Actor with ActorLogging {
       })
 
       // 2. make actor with topic list
-      context.actorOf(SubscirbeWorker.props(arg)).tell(request, sender)
+      context.actorOf(SubscirbeWorker.props(arg, sender)).tell(request, sender)
     }
     case request: Unsubscribe => {
-//      // 1. Get Every Topics
-//      val something = request.topicFilter.map( tf => {
-//        val topicNodes: List[ActorRef] = nTopicTreeRoot.getTopicNode(tf.topic)
-//        (tf.topic, topicNodes)
-//      })
-//
-//      // 2. make actor with topic list
-//      context.actorOf(UnsubscribeWorker.props(something)).tell(request, sender)
+      val something = request.topicFilter.map( tf => {
+        (tf.topic, nTopicTreeRoot.getTopicNode(tf.topic))
+      })
+
+      context.actorOf(UnsubscribeWorker.props(something, sender)).tell(request, sender)
     }
 
     case request: Publish => {
@@ -65,7 +62,7 @@ class TopicManager extends Actor with ActorLogging {
       val topics = nTopicTreeRoot.matchedTopicNodesWithOutWildCard(request.topic)
 
       // 2. make actor with topic list
-      context.actorOf(PublishWorker.props(topics, request, sender))
+      context.actorOf(PublishWorker.props(topics, sender)) ! request
     }
 
     case publish: PublishRetain => {
@@ -78,12 +75,12 @@ class TopicManager extends Actor with ActorLogging {
 }
 
 object SubscirbeWorker {
-  def props(arg: List[(String, Short, ActorRef)]) = {
-    Props(classOf[SubscirbeWorker], arg)
+  def props(arg: List[(String, Short, ActorRef)], originSession: ActorRef) = {
+    Props(classOf[SubscirbeWorker], arg, originSession)
   }
 }
 
-class SubscirbeWorker(something: List[(String, Short, ActorRef)]) extends Actor with ActorLogging {
+class SubscirbeWorker(something: List[(String, Short, ActorRef)], originSession: ActorRef) extends Actor with ActorLogging {
   var count = 0
 
   def receive = {
@@ -105,7 +102,8 @@ class SubscirbeWorker(something: List[(String, Short, ActorRef)]) extends Actor 
 
       if (something.size == count) {
         val result = something.map(x => 0.toShort)
-        sender ! Subscribed(result)
+        log.debug("[SUBSCRIBEWORKER] i will send back subscribed to session({}) topic({})", sender, response.topicName)
+        originSession ! Subscribed(result)
         context.stop(self)
       }
     }
@@ -115,53 +113,96 @@ class SubscirbeWorker(something: List[(String, Short, ActorRef)]) extends Actor 
 }
 
 object UnsubscribeWorker {
-  def props(something: List[(String, List[ActorRef])]) = {
-    Props(classOf[UnsubscribeWorker], something)
+  def props(something: List[(String, ActorRef)], originSession: ActorRef) = {
+    Props(classOf[UnsubscribeWorker], something, originSession)
   }
 }
 
-class UnsubscribeWorker(something: List[(String, List[ActorRef])]) extends Actor with ActorLogging {
+class UnsubscribeWorker(something: List[(String, ActorRef)], originSession: ActorRef) extends Actor with ActorLogging {
   def receive = {
     // 3. unsubscribe every topic and send back a result with origin request
     case request: Unsubscribe =>
+      val result = something.map(x => {
+        x._2 ! TopicUnsubscribe(request.session)
+        0.toShort
+      })
+
+      log.debug("UnsubscribeWorker {} {}", something, originSession)
+      originSession ! Unsubscribed(result)
       context.stop(self)
     case _ =>
   }
 }
 
 object PublishWorker {
-  def props(topics: List[ActorRef], request: Publish, session: ActorRef) = {
-    Props(classOf[PublishWorker], topics, request, session)
+  def props(topics: List[ActorRef], session: ActorRef) = {
+    Props(classOf[PublishWorker], topics, session)
   }
 }
 
-// FIXME : change to FSM
-class PublishWorker(topics: List[ActorRef], request: Publish, session: ActorRef) extends Actor with ActorLogging {
+sealed trait PublishWorkerState
 
-  var count = 0
-  var subscribers = scala.collection.mutable.Set[(ActorRef, Short)]()
-  topics match {
-    case x => x.foreach(y => y.tell(TopicGetSubscribers, self))
+sealed trait PublishWorkerData
+
+case object Init extends PublishWorkerState
+
+case object Aggregation extends PublishWorkerState
+
+case class PublishRequest(publish: Publish) extends PublishWorkerData
+case class AggregationData(count: Int, subscribers: List[(ActorRef, Short)], publish: Publish) extends PublishWorkerData
+
+class PublishWorker(topics: List[ActorRef],  session: ActorRef)
+  extends FSM[PublishWorkerState, PublishWorkerData]
+  with ActorLogging {
+
+  startWith(Init, null)
+
+  when(Init) {
+    case Event(publish: Publish, _) =>
+      log.debug("[PublishWorker] init {}", publish)
+      topics match {
+        case x => x.foreach(y => y.tell(TopicGetSubscribers, self))
+      }
+    goto(Aggregation) using PublishRequest(publish)
   }
 
-  def receive = {
-    case response: TopicSubscribers =>
-      count = count + 1
+  when(Aggregation){
+    case Event(response: TopicSubscribers, p @ PublishRequest(request)) =>
+      log.debug("[PublishWorker] Aggregation {} {}", response, p)
+      if (topics.size == 1){
 
-      subscribers = subscribers.++(response.subscribers)
+        log.debug("PublishWorker {} " + request.topic, response.subscribers)
+        response.subscribers.par.foreach(
+          x => {
+            x._1 ! PublishMessage(request.topic, x._2, request.payload)
+          }
+        )
+        //fixme : change the name
+//        log.debug("PublishWorker .. session({})", session)
+        session ! Published(request.packetId, true)
+        stop(FSM.Shutdown)
+      }else {
+        stay using AggregationData(1, response.subscribers, request)
+      }
+    case Event(response: TopicSubscribers, a @ AggregationData(count, subscribers, request)) =>
+      log.debug("PublishWorker {} {}/{} " + request.topic, subscribers, count + 1, topics.size)
 
-      log.debug("PUBLISHWORKER {} {}/{}", subscribers, count, topics.size)
+      if (topics.size == count + 1){
 
-      if (topics.size == count) {
         log.debug("PublishWorker {}", subscribers)
-        subscribers.par.foreach(
-        x => {
-          x._1 ! PublishMessage(request.topic, x._2, request.payload)
-        }
+        (subscribers ::: response.subscribers).par.foreach(
+          x => {
+            log.debug("PublishWorker publish to({}) request({})", x._1, request.topic)
+            x._1 ! PublishMessage(request.topic, x._2, request.payload)
+          }
         )
         session ! Published(request.packetId, true)
-        context.stop(self)
+        stop(FSM.Shutdown)
+      }else {
+        stay using AggregationData(count+1, subscribers ::: response.subscribers, request)
       }
-    case _ =>
+
   }
+
+  initialize()
 }

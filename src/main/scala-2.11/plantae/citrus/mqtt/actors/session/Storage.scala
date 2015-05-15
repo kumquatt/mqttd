@@ -93,7 +93,9 @@ class Storage(sessionName: String) extends Serializable {
           readyQueue.last.readyMessages = (readyQueue.last.readyMessages :+ ReadyMessage(payload, qos, retain, topic))
       }
       case List() => readyQueue = readyQueue :+ ChunkMessage(OnMemory, List(ReadyMessage(payload, qos, retain, topic)))
+
     }
+    println("STORAGE session {} ready {}", sessionName, readyQueue)
   }
 
 

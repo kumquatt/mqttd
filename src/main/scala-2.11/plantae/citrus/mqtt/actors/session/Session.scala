@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor._
 import plantae.citrus.mqtt.actors.SystemRoot
-import plantae.citrus.mqtt.actors.topic.{Subscribe, Subscribed, TopicNameQos}
+import plantae.citrus.mqtt.actors.topic._
 import plantae.citrus.mqtt.dto.connect.{ReturnCode, Will}
 import plantae.citrus.mqtt.packet._
 import scodec.bits.ByteVector
@@ -229,10 +229,7 @@ class Session extends Actor with ActorLogging {
         subscribeTopics(subscribe)
 
       case unsubscribe: UnsubscribePacket =>
-      // TODO : 이거 구현 필요.
-      //        unsubscribeTopics(unsubscribe.topicFilter)
-      //        sender ! MQTTOutboundPacket(UnsubAckPacket(packetId = unsubscribe.packetId))
-
+        unsubscribeTopics(unsubscribe)
 
     }
 
@@ -244,20 +241,11 @@ class Session extends Actor with ActorLogging {
     context.actorOf(SubscribeTopic.props(subscribe.topicFilter, session, connectionStatus, subscribe))
   }
 
-  //  def unsubscribeTopics(topics: List[String]) = {
-  //    val session = self
-  //    topics.foreach(x => {
-  //      SystemRoot.directoryProxy.tell(DirectoryTopicRequest(x), context.actorOf(Props(new Actor {
-  //        def receive = {
-  //          case DirectoryTopicResult(name, topicActors) =>
-  //            topicActors.par.foreach(actor => actor ! Unsubscribe(session))
-  //          //          topicActor != UNSUBSCRIBE
-  //        }
-  //      })))
-  //
-  //    }
-  //    )
-  //  }
+  def unsubscribeTopics(unsubscribe: UnsubscribePacket) = {
+    val session = self
+
+    context.actorOf(UnsubscribeTopic.props(unsubscribe.topicFilter, session, connectionStatus, unsubscribe))
+  }
 
   def invokePublish = {
     val session = self
@@ -309,6 +297,35 @@ class SubscribeTopic(topicFilter: List[(String, Short)],
           log.debug("[SUBSCRIBETOPIC] send a result to {}", x)
           x.socket ! MQTTOutboundPacket(
             SubAckPacket(packetId = subscribe.packetId, returnCode = response.result)
+          )
+        }
+        case None =>
+      }
+      context.stop(self)
+  }
+}
+
+object UnsubscribeTopic {
+  def props(topicFilter: List[String], session: ActorRef, connectionStatus: Option[ConnectionStatus], unsubscribe: UnsubscribePacket) = {
+    Props(classOf[UnsubscribeTopic], topicFilter, session, connectionStatus, unsubscribe)
+  }
+}
+
+class UnsubscribeTopic(topicFilter: List[String],
+                     session: ActorRef,
+                     connectionStatus: Option[ConnectionStatus],
+                     unsubscribe: UnsubscribePacket) extends Actor with ActorLogging {
+
+  SystemRoot.topicManager ! Unsubscribe(topicFilter.map(x => TopicName(x)), session)
+
+  override def receive = {
+    case response: Unsubscribed =>
+      log.debug("[UNSUBSCRIBETOPIC] {}", response)
+      connectionStatus match {
+        case Some(x) => {
+          log.debug("[UNSUBSCRIBETOPIC] send a result to {}", x)
+          x.socket ! MQTTOutboundPacket(
+            SubAckPacket(packetId = unsubscribe.packetId, returnCode = response.result)
           )
         }
         case None =>

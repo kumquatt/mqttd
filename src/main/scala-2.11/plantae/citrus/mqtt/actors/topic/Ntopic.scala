@@ -61,7 +61,7 @@ class Topic(topicName: String) extends Actor with ActorLogging {
     case TopicUnsubscribe(session) =>
       log.debug("[NEWTOPIC]TopicUnsubscribe topic({}) client({})", topicName, session.path.name)
       subscriberMap.-=(session)
-      sender ! TopicUnsubscribed(topicName, true)
+//      sender ! TopicUnsubscribed(topicName, true)
     case TopicSubscriberClear =>
       log.debug("[NEWTOPIC]TopicSubscriberClear topic({})", topicName)
       subscriberMap.clear
