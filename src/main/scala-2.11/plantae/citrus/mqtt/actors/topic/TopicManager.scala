@@ -159,8 +159,7 @@ object PublishWorker {
 
 sealed trait PublishWorkerData
 
-case class PublishRequest(publish: Publish) extends PublishWorkerData
-case class AggregationData(count: Int, subscribers: List[(ActorRef, Short)], publish: Publish) extends PublishWorkerData
+case class PublishAggregationData(count: Int, subscribers: List[(ActorRef, Short)], publish: Publish) extends PublishWorkerData
 
 class PublishWorker(topics: List[ActorRef],  session: ActorRef)
   extends FSM[WorkerState, PublishWorkerData]
@@ -175,28 +174,11 @@ class PublishWorker(topics: List[ActorRef],  session: ActorRef)
       topics match {
         case x => x.foreach(y => y.tell(TopicGetSubscribers, self))
       }
-    goto(Aggregation) using PublishRequest(publish)
+    goto(Aggregation) using PublishAggregationData(0, Nil, publish)
   }
 
   when(Aggregation){
-    case Event(response: TopicSubscribers, p @ PublishRequest(request)) =>
-      log.debug("[PublishWorker] Aggregation {} {}", response, p)
-      if (topics.size == 1){
-
-        log.debug("PublishWorker {} " + request.topic, response.subscribers)
-        response.subscribers.par.foreach(
-          x => {
-            x._1 ! PublishMessage(request.topic, x._2, request.payload)
-          }
-        )
-        //fixme : change the name
-//        log.debug("PublishWorker .. session({})", session)
-        session ! Published(request.packetId, true)
-        stop(FSM.Shutdown)
-      }else {
-        stay using AggregationData(1, response.subscribers, request)
-      }
-    case Event(response: TopicSubscribers, a @ AggregationData(count, subscribers, request)) =>
+    case Event(response: TopicSubscribers, a @ PublishAggregationData(count, subscribers, request)) =>
       log.debug("PublishWorker {} {}/{} " + request.topic, subscribers, count + 1, topics.size)
 
       if (topics.size == count + 1){
@@ -211,7 +193,7 @@ class PublishWorker(topics: List[ActorRef],  session: ActorRef)
         session ! Published(request.packetId, true)
         stop(FSM.Shutdown)
       }else {
-        stay using AggregationData(count+1, subscribers ::: response.subscribers, request)
+        stay using PublishAggregationData(count+1, subscribers ::: response.subscribers, request)
       }
 
   }
