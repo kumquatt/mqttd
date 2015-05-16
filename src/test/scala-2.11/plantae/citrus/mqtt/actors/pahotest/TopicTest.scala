@@ -36,10 +36,31 @@ object TopicTest extends App {
 
   ////////////////
   client1.subscribe("a/#", 2)
-  client1.subscribe("a/+", 2)
-  client1.subscribe("a/b", 1)
-  client2.publish("a/b", "a/b topic".getBytes, 0, false)
+//  client1.subscribe("a/+", 2)
+//  client1.subscribe("a/b", 1)
 
+
+  client1.subscribe("a/#", 2)
+  client1.subscribe("a/#", 2)
+  client1.subscribe("a/#", 2)
+  client1.subscribe("a/#", 2)
+  client1.subscribe("a/#", 2)
+  client1.subscribe("a/#", 2)
+  client1.subscribe("a/#", 2)
+  client1.subscribe("a/#", 2)
+  client1.subscribe("a/#", 2)
+
+  client2.publish("a/b", "a/b topic qos 0".getBytes, 0, false)
+  client2.publish("a/b", "a/b topic qos 1".getBytes, 1, false)
+  client2.publish("a/b", "a/b topic qos 2".getBytes, 2, false)
+
+  client1.subscribe("#")
+
+  Range(1, 100).foreach(x => {
+    Thread.sleep(1000)
+    println(x + " second passed")
+  })
+//  client1.disconnect()
 }
 
 object UnsubscribeTest extends App {
@@ -95,4 +116,5 @@ object UnsubscribeTest extends App {
   Thread.sleep(1000)
   client2.unsubscribe("a/#")
   client2.publish("a/b", "a/b 44444".getBytes, 0, false)
+
 }

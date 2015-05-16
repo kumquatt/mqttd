@@ -36,12 +36,11 @@ class TopicManager extends Actor with ActorLogging {
       log.debug("[TOPICMANAGER] {}", request)
       // 1. Get Every Topics
       val arg = request.topicFilter.map( tf => {
-        log.debug("TOPICMANAGER!!!! {}", nTopicTreeRoot.matchedTopicNodes("#"))
         (tf.topic, tf.qos, nTopicTreeRoot.getTopicNode(tf.topic))
       })
 
       // 2. make actor with topic list
-      context.actorOf(SubscirbeWorker.props(arg, sender)).tell(request, sender)
+      context.actorOf(SubscribeWorker.props(arg)) ! request
     }
     case request: Unsubscribe => {
       val something = request.topicFilter.map( tf => {
@@ -74,42 +73,59 @@ class TopicManager extends Actor with ActorLogging {
   }
 }
 
-object SubscirbeWorker {
-  def props(arg: List[(String, Short, ActorRef)], originSession: ActorRef) = {
-    Props(classOf[SubscirbeWorker], arg, originSession)
+sealed trait WorkerState
+
+sealed trait SubscribeWorkerData
+
+case object Init extends WorkerState
+
+case object Aggregation extends WorkerState
+
+case class SubscribeAggregationData(count: Int, responses: List[TopicSubscribed], request: Subscribe) extends SubscribeWorkerData
+
+object SubscribeWorker {
+  def props(arg: List[(String, Short, ActorRef)]) = {
+    Props(classOf[SubscribeWorker], arg)
   }
 }
 
-class SubscirbeWorker(something: List[(String, Short, ActorRef)], originSession: ActorRef) extends Actor with ActorLogging {
-  var count = 0
+class SubscribeWorker(topics: List[(String, Short, ActorRef)])
+  extends FSM[WorkerState, SubscribeWorkerData]
+  with ActorLogging {
 
-  def receive = {
-    // 3. subscribe every topic and send back a result with origin request
-    case request: Subscribe =>
-      log.debug("[SUBSCRIBEWORKER] {}", request)
-      val result = something.map(_ match {
-        case(topicName, qos, topic) => {
+  startWith(Init, null)
+
+  when(Init) {
+    case Event(request: Subscribe, _) =>{
+      log.debug("[SubscribeWorker] init topics {} subscribe {} from {}", topics, request, request.session)
+      topics.foreach(_ match {
+        case (topicName, qos, topic) => {
           topic ! TopicSubscribe(request.session, qos, true)
-          0.toShort
-        }}).toList
-      log.debug("[SUBSCRIBEWORKER] {}", result)
+        }
+      })
+    }
 
-    case response: TopicSubscribed => {
-      count = count + 1
-      log.debug("[SUBSCRIBEWORKER] {} {}/{}", response, count, something.size)
+    goto(Aggregation) using SubscribeAggregationData(0, Nil, request)
+  }
 
+  when(Aggregation) {
+    case Event(response: TopicSubscribed, a @ SubscribeAggregationData(count, responses, request)) => {
+      log.debug("[SubscribeWorker] count {}/{}", count + 1, topics.size)
+
+      // if session is newbie
       if (response.newbie) SystemRoot.topicManager ! PublishRetain(response.topicName, response.session)
 
-      if (something.size == count) {
-        val result = something.map(x => 0.toShort)
-        log.debug("[SUBSCRIBEWORKER] i will send back subscribed to session({}) topic({})", sender, response.topicName)
-        originSession ! Subscribed(result)
-        context.stop(self)
-      }
+      if (topics.size == count + 1){
+        // TODO need to change below with using responses
+        val result = topics.map(_ => 0.toShort)
+        request.session ! Subscribed(result)
+        stop(FSM.Shutdown)
+      } else
+        stay using SubscribeAggregationData(count + 1, response :: responses, request)
     }
-    case _ =>
-
   }
+
+  initialize()
 }
 
 object UnsubscribeWorker {
@@ -140,19 +156,14 @@ object PublishWorker {
   }
 }
 
-sealed trait PublishWorkerState
 
 sealed trait PublishWorkerData
-
-case object Init extends PublishWorkerState
-
-case object Aggregation extends PublishWorkerState
 
 case class PublishRequest(publish: Publish) extends PublishWorkerData
 case class AggregationData(count: Int, subscribers: List[(ActorRef, Short)], publish: Publish) extends PublishWorkerData
 
 class PublishWorker(topics: List[ActorRef],  session: ActorRef)
-  extends FSM[PublishWorkerState, PublishWorkerData]
+  extends FSM[WorkerState, PublishWorkerData]
   with ActorLogging {
 
   startWith(Init, null)
