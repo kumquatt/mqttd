@@ -39,7 +39,8 @@ libraryDependencies ++= {
 
     "io.spray"            %%  "spray-can"     % sprayVersion,
     "io.spray"            %%  "spray-routing-shapeless2" % sprayVersion,
-    "io.spray"            %%  "spray-testkit" % sprayVersion  % "test"
+    "io.spray"            %%  "spray-testkit" % sprayVersion  % "test",
+    "io.spray" %% "spray-httpx" % sprayVersion
   )
 }
 
