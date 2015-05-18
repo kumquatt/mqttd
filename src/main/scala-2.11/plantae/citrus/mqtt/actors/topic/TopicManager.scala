@@ -40,7 +40,7 @@ class TopicManager extends Actor with ActorLogging {
       })
 
       // 2. make actor with topic list
-      context.actorOf(SubscribeWorker.props(arg)) ! request
+      context.actorOf(SubscribeWorker.props(arg, sender)) ! request
     }
     case request: Unsubscribe => {
       val something = request.topicFilter.map( tf => {
@@ -84,12 +84,12 @@ case object Aggregation extends WorkerState
 case class SubscribeAggregationData(count: Int, responses: List[TopicSubscribed], request: Subscribe) extends SubscribeWorkerData
 
 object SubscribeWorker {
-  def props(arg: List[(String, Short, ActorRef)]) = {
-    Props(classOf[SubscribeWorker], arg)
+  def props(arg: List[(String, Short, ActorRef)], sessionReceiver: ActorRef) = {
+    Props(classOf[SubscribeWorker], arg, sessionReceiver)
   }
 }
 
-class SubscribeWorker(topics: List[(String, Short, ActorRef)])
+class SubscribeWorker(topics: List[(String, Short, ActorRef)], sessionReceiver: ActorRef)
   extends FSM[WorkerState, SubscribeWorkerData]
   with ActorLogging {
 
@@ -118,7 +118,7 @@ class SubscribeWorker(topics: List[(String, Short, ActorRef)])
       if (topics.size == count + 1){
         // TODO need to change below with using responses
         val result = topics.map(_ => 0.toShort)
-        request.session ! Subscribed(result)
+        sessionReceiver ! Subscribed(result)
         stop(FSM.Shutdown)
       } else
         stay using SubscribeAggregationData(count + 1, response :: responses, request)
