@@ -24,6 +24,6 @@ Kumquatt mqttd supports MQTT v3.1.1 protocols.
 - [ ] Broker Clustering
 - [ ] 500K+ concurrent clients connections per server
 
-## Authors
+## Author
 
-before30@gmail.com, 
+before30@gmail.com, yinjae@gmail.com
