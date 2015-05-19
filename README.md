@@ -26,4 +26,4 @@ Kumquatt mqttd supports MQTT v3.1.1 protocols.
 
 ## Authors
 
-Wonsuk Yang before30@gmail.com
+before30@gmail.com, 
