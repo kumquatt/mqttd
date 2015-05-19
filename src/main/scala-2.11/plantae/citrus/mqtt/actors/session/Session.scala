@@ -317,6 +317,7 @@ class SubscribeTopic(topicFilter: List[(String, Short)],
       stop(FSM.Shutdown)
     }
   }
+  initialize()
 }
 
 object UnsubscribeTopic {
@@ -355,4 +356,5 @@ class UnsubscribeTopic(topicFilter: List[String],
       stop(FSM.Shutdown)
     }
   }
+  initialize()
 }
