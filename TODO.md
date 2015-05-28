@@ -6,8 +6,10 @@
 
 ~~4. redelivery message on reconnection~~
 
-5. performance test
+5. refactoring the project
 
-6. documenation
+6. performance test
+
+7. documenation
 
 

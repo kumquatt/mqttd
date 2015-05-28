@@ -1,8 +1,6 @@
 package plantae.citrus
 
-import akka.actor.{Props, ActorSystem}
-import com.typesafe.config.ConfigFactory
-import plantae.citrus.exercise.{DISCONNECT_MQTT, CONNECT_MQTT, PahoClient, StartUpMessage}
+import akka.actor.Props
 import plantae.citrus.mqtt.actors.SystemRoot
 import plantae.citrus.mqtt.actors.connection.Server
 

@@ -238,13 +238,13 @@ class Session extends Actor with ActorLogging {
   def subscribeTopics(subscribe: SubscribePacket) = {
     val session = self
 
-    context.actorOf(SubscribeTopic.props(subscribe.topicFilter, session, connectionStatus, subscribe))
+    context.actorOf(SubscribeTopic.props(subscribe.topicFilter, session, connectionStatus, subscribe)) ! subscribe
   }
 
   def unsubscribeTopics(unsubscribe: UnsubscribePacket) = {
     val session = self
 
-    context.actorOf(UnsubscribeTopic.props(unsubscribe.topicFilter, session, connectionStatus, unsubscribe))
+    context.actorOf(UnsubscribeTopic.props(unsubscribe.topicFilter, session, connectionStatus, unsubscribe)) ! unsubscribe
   }
 
   def invokePublish = {
@@ -276,34 +276,48 @@ class Session extends Actor with ActorLogging {
 
 }
 
+sealed trait SessionWorkerState
+
+case object SessionWorkerInit extends SessionWorkerState
+
+case object SessionWorkerWaitResponse extends SessionWorkerState
+
 object SubscribeTopic {
   def props(topicFilter: List[(String, Short)], session: ActorRef, connectionStatus: Option[ConnectionStatus], subscribe: SubscribePacket) = {
     Props(classOf[SubscribeTopic], topicFilter, session, connectionStatus, subscribe)
   }
 }
 
-// TODO : using FSM
 class SubscribeTopic(topicFilter: List[(String, Short)],
                      session: ActorRef,
                      connectionStatus: Option[ConnectionStatus],
-                     subscribe: SubscribePacket) extends Actor with ActorLogging {
+                     subscribe: SubscribePacket) extends FSM[SessionWorkerState, SubscribePacket] with ActorLogging {
 
-  SystemRoot.topicManager ! Subscribe(topicFilter.map(x => TopicNameQos(x._1, x._2)), session)
+  startWith(SessionWorkerInit, null)
 
-  override def receive = {
-    case response: Subscribed =>
-      log.debug("[SUBSCRIBETOPIC] {}", response)
+  when(SessionWorkerInit) {
+    case Event(subscribePacket: SubscribePacket, _) =>
+      SystemRoot.topicManager ! Subscribe(topicFilter.map(x => TopicNameQos(x._1, x._2)), session)
+      goto(SessionWorkerWaitResponse) using subscribePacket
+  }
+
+  when(SessionWorkerWaitResponse) {
+    case Event(response: Subscribed, subscribePacket: SubscribePacket) => {
+      log.debug("[SubscribeTopic] {}", response)
       connectionStatus match {
         case Some(x) => {
-          log.debug("[SUBSCRIBETOPIC] send a result to {}", x)
+          log.debug("[SubscribeTopic] {}", x)
           x.socket ! MQTTOutboundPacket(
-            SubAckPacket(packetId = subscribe.packetId, returnCode = response.result)
-          )
+            SubAckPacket(packetId = subscribe.packetId, returnCode = response.result))
         }
-        case None =>
+        case None => {
+          log.info("[SubscribeTopic] it subscribed but no connection {}", subscribePacket)
+        }
       }
-      context.stop(self)
+      stop(FSM.Shutdown)
+    }
   }
+  initialize()
 }
 
 object UnsubscribeTopic {
@@ -312,17 +326,22 @@ object UnsubscribeTopic {
   }
 }
 
-// TODO: using FSM
 class UnsubscribeTopic(topicFilter: List[String],
                      session: ActorRef,
                      connectionStatus: Option[ConnectionStatus],
-                     unsubscribe: UnsubscribePacket) extends Actor with ActorLogging {
+                     unsubscribe: UnsubscribePacket) extends FSM[SessionWorkerState, UnsubscribePacket] with ActorLogging {
 
-  SystemRoot.topicManager ! Unsubscribe(topicFilter.map(x => TopicName(x)), session)
+  startWith(SessionWorkerInit, null)
 
-  override def receive = {
-    case response: Unsubscribed =>
-      log.debug("[UNSUBSCRIBETOPIC] {}", response)
+  when(SessionWorkerInit) {
+    case Event(unsubscribePacket: UnsubscribePacket, _) =>
+      SystemRoot.topicManager ! Unsubscribe(topicFilter.map(x => TopicName(x)), session)
+      goto(SessionWorkerWaitResponse) using unsubscribePacket
+  }
+
+  when(SessionWorkerWaitResponse) {
+    case Event(response: Unsubscribed, unsubscribePacket: UnsubscribePacket) => {
+      log.debug("[UnsubscribeTopic] {}", response)
       connectionStatus match {
         case Some(x) => {
           log.debug("[UNSUBSCRIBETOPIC] send a result to {}", x)
@@ -331,7 +350,11 @@ class UnsubscribeTopic(topicFilter: List[String],
           )
         }
         case None =>
+          log.info("[UnsubscribeTopic] it unsubscribed but no connection {}", unsubscribePacket)
       }
-      context.stop(self)
+
+      stop(FSM.Shutdown)
+    }
   }
+  initialize()
 }

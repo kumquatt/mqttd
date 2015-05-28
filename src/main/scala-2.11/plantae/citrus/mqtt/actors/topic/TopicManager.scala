@@ -3,7 +3,6 @@ package plantae.citrus.mqtt.actors.topic
 import akka.actor._
 import plantae.citrus.mqtt.actors.SystemRoot
 import plantae.citrus.mqtt.actors.session.PublishMessage
-import plantae.citrus.mqtt.actors.topic.TopicPublishRetainMessage
 import scodec.bits.ByteVector
 
 trait TopicRequest
@@ -11,6 +10,7 @@ trait TopicRequest
 trait TopicResponse
 
 case class TopicNameQos(topic: String, qos: Short)
+
 case class TopicName(topic: String)
 
 case class Subscribe(topicFilter: List[TopicNameQos], session: ActorRef) extends TopicRequest
@@ -35,15 +35,15 @@ class TopicManager extends Actor with ActorLogging {
     case request: Subscribe => {
       log.debug("[TOPICMANAGER] {}", request)
       // 1. Get Every Topics
-      val arg = request.topicFilter.map( tf => {
+      val arg = request.topicFilter.map(tf => {
         (tf.topic, tf.qos, nTopicTreeRoot.getTopicNode(tf.topic))
       })
 
       // 2. make actor with topic list
-      context.actorOf(SubscribeWorker.props(arg)) ! request
+      context.actorOf(SubscribeWorker.props(arg, sender)) ! request
     }
     case request: Unsubscribe => {
-      val something = request.topicFilter.map( tf => {
+      val something = request.topicFilter.map(tf => {
         (tf.topic, nTopicTreeRoot.getTopicNode(tf.topic))
       })
 
@@ -53,7 +53,7 @@ class TopicManager extends Actor with ActorLogging {
     case request: Publish => {
       log.debug("[TopicManager] Publish {}", request)
       // 1. Get Every Topics
-      if (request.retain == true){
+      if (request.retain == true) {
         log.debug("[TopicManager] Topic({}) Store retained message {} ", request.topic, request)
         nTopicTreeRoot.getTopicNode(request.topic) ! TopicStoreRetainMessage(request.payload)
       }
@@ -68,7 +68,7 @@ class TopicManager extends Actor with ActorLogging {
 
       val topics = nTopicTreeRoot.matchedTopicNodes(publish.topic)
       log.debug("PublishRetain {} {}", topics, publish)
-      topics.foreach( x => x ! TopicPublishRetainMessage(publish.session))
+      topics.foreach(x => x ! TopicPublishRetainMessage(publish.session))
     }
   }
 }
@@ -84,19 +84,19 @@ case object Aggregation extends WorkerState
 case class SubscribeAggregationData(count: Int, responses: List[TopicSubscribed], request: Subscribe) extends SubscribeWorkerData
 
 object SubscribeWorker {
-  def props(arg: List[(String, Short, ActorRef)]) = {
-    Props(classOf[SubscribeWorker], arg)
+  def props(arg: List[(String, Short, ActorRef)], sessionReceiver: ActorRef) = {
+    Props(classOf[SubscribeWorker], arg, sessionReceiver)
   }
 }
 
-class SubscribeWorker(topics: List[(String, Short, ActorRef)])
+class SubscribeWorker(topics: List[(String, Short, ActorRef)], sessionReceiver: ActorRef)
   extends FSM[WorkerState, SubscribeWorkerData]
   with ActorLogging {
 
   startWith(Init, null)
 
   when(Init) {
-    case Event(request: Subscribe, _) =>{
+    case Event(request: Subscribe, _) => {
       log.debug("[SubscribeWorker] init topics {} subscribe {} from {}", topics, request, request.session)
       topics.foreach(_ match {
         case (topicName, qos, topic) => {
@@ -105,20 +105,20 @@ class SubscribeWorker(topics: List[(String, Short, ActorRef)])
       })
     }
 
-    goto(Aggregation) using SubscribeAggregationData(0, Nil, request)
+      goto(Aggregation) using SubscribeAggregationData(0, Nil, request)
   }
 
   when(Aggregation) {
-    case Event(response: TopicSubscribed, a @ SubscribeAggregationData(count, responses, request)) => {
+    case Event(response: TopicSubscribed, a@SubscribeAggregationData(count, responses, request)) => {
       log.debug("[SubscribeWorker] count {}/{}", count + 1, topics.size)
 
       // if session is newbie
       if (response.newbie) SystemRoot.topicManager ! PublishRetain(response.topicName, response.session)
 
-      if (topics.size == count + 1){
-        // TODO need to change below with using responses
+      if (topics.size == count + 1) {
+        // TODO: need to change below with using responses
         val result = topics.map(_ => 0.toShort)
-        request.session ! Subscribed(result)
+        sessionReceiver ! Subscribed(result)
         stop(FSM.Shutdown)
       } else
         stay using SubscribeAggregationData(count + 1, response :: responses, request)
@@ -161,7 +161,7 @@ sealed trait PublishWorkerData
 
 case class PublishAggregationData(count: Int, subscribers: List[(ActorRef, Short)], publish: Publish) extends PublishWorkerData
 
-class PublishWorker(topics: List[ActorRef],  session: ActorRef)
+class PublishWorker(topics: List[ActorRef], session: ActorRef)
   extends FSM[WorkerState, PublishWorkerData]
   with ActorLogging {
 
@@ -174,14 +174,14 @@ class PublishWorker(topics: List[ActorRef],  session: ActorRef)
       topics match {
         case x => x.foreach(y => y.tell(TopicGetSubscribers, self))
       }
-    goto(Aggregation) using PublishAggregationData(0, Nil, publish)
+      goto(Aggregation) using PublishAggregationData(0, Nil, publish)
   }
 
-  when(Aggregation){
-    case Event(response: TopicSubscribers, a @ PublishAggregationData(count, subscribers, request)) =>
+  when(Aggregation) {
+    case Event(response: TopicSubscribers, a@PublishAggregationData(count, subscribers, request)) =>
       log.debug("PublishWorker {} {}/{} " + request.topic, subscribers, count + 1, topics.size)
 
-      if (topics.size == count + 1){
+      if (topics.size == count + 1) {
 
         log.debug("PublishWorker {}", subscribers)
         (subscribers ::: response.subscribers).par.foreach(
@@ -192,8 +192,8 @@ class PublishWorker(topics: List[ActorRef],  session: ActorRef)
         )
         session ! Published(request.packetId, true)
         stop(FSM.Shutdown)
-      }else {
-        stay using PublishAggregationData(count+1, subscribers ::: response.subscribers, request)
+      } else {
+        stay using PublishAggregationData(count + 1, subscribers ::: response.subscribers, request)
       }
 
   }
