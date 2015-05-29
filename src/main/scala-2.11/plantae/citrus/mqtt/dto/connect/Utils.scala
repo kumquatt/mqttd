@@ -1,7 +1,7 @@
 package plantae.citrus.mqtt.dto.connect
 
 import plantae.citrus.mqtt.packet.ControlPacket
-import scodec.Codec
+import scodec.{Err, Codec}
 import scodec.bits.{BitVector, ByteVector}
 
 import scala.annotation.tailrec
@@ -28,10 +28,15 @@ object PacketDecoder {
     @tailrec
     def decodeRec(data: BitVector, acc: List[ControlPacket]): (List[ControlPacket], BitVector) = {
       val result = Codec[ControlPacket].decode(data)
+
+
       if (result.isSuccessful) {
         if (result.require.remainder.nonEmpty) decodeRec(result.require.remainder, result.require.value :: acc)
         else (result.require.value :: acc, result.require.remainder)
-      } else (acc, BitVector.empty)
+      } else {
+        if (result.toEither.left.get.isInstanceOf[Err.InsufficientBits]) (acc, data)
+        else (acc, BitVector.empty)
+      }
     }
 
     decodeRec(data, List.empty[ControlPacket])
