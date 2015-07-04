@@ -13,7 +13,7 @@ scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
 resolvers ++= {
   Seq(
-    "repo" at "http://repo.typesafe.com/typesafe/releases/",
+    "repo" at "http://repo.typesafe.com/typesafe/releases/"
   )
 }
 
